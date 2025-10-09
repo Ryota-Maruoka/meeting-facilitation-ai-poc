@@ -1,0 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+
+/* simple utility tokens for ★ and ◇ labels */
+.badge-star::after { content: "★"; @apply ml-1 text-amber-500; }
+.badge-diamond::after { content: "◇"; @apply ml-1 text-sky-500; }
