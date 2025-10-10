@@ -1,0 +1,300 @@
+# Meeting Facilitation AI PoC - Coding Rules
+
+## ⚠️ CRITICAL: Rule Enforcement Policy（ルール適用ポリシー）
+
+**以下のルールは絶対に守ること（MUST）：**
+
+1. **ルールファイル優先**: `@docs/frontend-rules.md` または `@docs/backend-rules.md` が添付されている場合、そのルールに100%従うこと
+2. **ルール違反の禁止**: 添付されたルールファイルの内容は「参考」ではなく「強制」である
+3. **実装前の確認**: コード生成前に添付ルールとの整合性を必ず確認すること
+4. **逃げ道の排除**: 「簡単のため」「速さのため」などの理由でルールを破ってはならない
+5. **違反の指摘**: 既存コードが規約違反の場合は必ず指摘すること
+
+## 🎯 Rule Priority（優先順位）
+
+1. **最優先**: 添付されたルールファイル（`docs/frontend-rules.md` or `docs/backend-rules.md`）
+2. **次点**: この `.cursorrules` ファイル
+3. **最後**: 一般的なベストプラクティス
+
+---
+
+## 🌐 Common Rules（共通ルール）
+
+### General Directives（基本方針）
+
+- **Always respond in Japanese**（常に日本語で応答する）
+- When generating code, clearly explain only the modified parts（コード生成時は修正箇所のみ明確に説明）
+- If the issue or requirement is unclear, ask the user for additional information（要件が不明確な場合は追加情報を質問）
+- Validate the correctness of the user's statements and provide responses based on your own understanding（ユーザーの発言を検証し、自分の理解に基づいて応答）
+
+### Code Quality（コード品質）
+
+- Write correct, up-to-date, bug-free, and fully functional code（正確で最新のバグのない完全に機能するコードを書く）
+- Ensure security, performance, and efficiency（セキュリティ、パフォーマンス、効率性を確保）
+- Prioritize readability over extreme optimization（極端な最適化よりも可読性を優先）
+- Fully implement all requested functionality（要求されたすべての機能を完全に実装）
+- Include all required imports（必要なすべてのimportを含める）
+- Use proper naming conventions（適切な命名規則を使用）
+- Ensure code is complete and thoroughly tested（コードが完全でテスト済みであることを確認）
+
+---
+
+## 📝 Naming Conventions（命名規則）
+
+### 🚫 NEVER（禁止事項）
+
+- ❌ 過度な省略（例: `usr`, `ctx`, `tmp`, `mgr`）→ わかりにくくなる
+- ❌ 曖昧すぎる名前（例: `data`, `info`, `obj`, `item` 単体）
+- ❌ 単数・複数の混乱（例: `user` に配列を入れる、`users` に単体を入れる）
+
+### ✅ ALWAYS（必須）
+
+- ✅ **単語は省略しない**（正し、広く使われている略語はOK）
+  - OK: `str`, `val`, `id`, `url`, `api`, `db`, `auth`, `max`, `min`, `num`, `idx`
+  - OK: `req`, `res`, `err`, `msg`, `btn`, `img`
+  - NG: `usr` → `user`, `ctx` → `context`, `mgr` → `manager`
+
+- ✅ **内容を簡潔に表す名前にする**
+  ```typescript
+  // ❌ Bad
+  const data = fetchData();
+  const info = getUserInfo();
+  
+  // ✅ Good
+  const meetingData = fetchMeetingData();
+  const userProfile = getUserProfile();
+  ```
+
+- ✅ **単数・複数を意識する**
+  ```typescript
+  // ❌ Bad
+  const user = ["Alice", "Bob"];  // 複数なのに単数形
+  const meetings = getMeeting();  // 単数なのに複数形
+  
+  // ✅ Good
+  const users = ["Alice", "Bob"];
+  const meeting = getMeeting();
+  const meetings = getAllMeetings();
+  ```
+
+---
+
+## 💬 Comments（コメント規約）
+
+### ✅ MUST（必須）
+
+- ✅ **ソースコメントを適宜記入する**
+  - 「何をしているか」よりも「なぜそうしているか」を書く
+  
+  ```typescript
+  // ❌ Bad: 何をしているかだけ
+  // データを取得する
+  const data = await fetch("/api/meetings");
+  
+  // ✅ Good: なぜそうしているかを書く
+  // リアルタイム更新のため、キャッシュを無効化してAPIから最新データを取得
+  const data = await fetch("/api/meetings", { cache: "no-store" });
+  ```
+
+- ✅ **複雑なロジックには必ずコメント**
+  ```python
+  # 議題から逸脱している可能性を判定
+  # しきい値0.3未満の場合は「逸脱」と判断（過去の運用データから決定）
+  if similarity_score < 0.3:
+      label = "possible_deviation"
+  ```
+
+- ✅ **TODO コメントの活用**
+  ```typescript
+  // TODO: エラーハンドリングを追加（優先度: 高）
+  // TODO: パフォーマンス改善を検討（N+1問題）
+  ```
+
+### 🚫 NEVER（禁止事項）
+
+- ❌ 不要なコメントは残さない
+  ```typescript
+  // ❌ Bad: 自明なコメント
+  // ユーザーIDを設定
+  user.id = userId;
+  
+  // ❌ Bad: コメントアウトされた古いコード
+  // const oldFunction = () => { ... };
+  ```
+
+---
+
+## 🔧 Other Rules（その他のルール）
+
+### ✅ MUST（必須）
+
+1. **共通処理や定数を積極的に使用する**
+   ```typescript
+   // ❌ Bad: マジックナンバー
+   if (duration > 180) { ... }
+   
+   // ✅ Good: 定数化
+   const MAX_MEETING_DURATION_MINUTES = 180;
+   if (duration > MAX_MEETING_DURATION_MINUTES) { ... }
+   ```
+
+2. **未使用の関数、変数は残さない**
+   - Linter（ESLint/ruff）で検出されたら即削除
+   - コメントアウトではなく削除（Git履歴に残る）
+
+### 🚫 NEVER（禁止事項）
+
+1. **共通処理を断りなく編集しない**
+   - 他機能に影響が出る可能性があるため
+   - 修正が必要な場合はチームに確認
+   - 影響範囲を必ず調査してから編集
+
+   ```typescript
+   // ❌ Bad: 共通utilsを勝手に修正
+   // utils/formatDate.ts を修正 → 全画面に影響
+   
+   // ✅ Good: 新しい関数を追加
+   // utils/formatDateCustom.ts を作成
+   ```
+
+---
+
+## 📁 Project Structure（プロジェクト構成）
+
+```
+meeting-facilitation-ai-poc/
+├── .cursorrules                      # このファイル（共通ルール）
+├── docs/
+│   ├── frontend-rules.md            # フロントエンド専用ルール
+│   ├── backend-rules.md             # バックエンド専用ルール
+│   └── templates.md                 # チャット指示テンプレート
+├── frontend/                         # Next.js + TypeScript
+│   ├── src/
+│   │   ├── app/                     # App Router
+│   │   ├── components/              # 共通コンポーネント
+│   │   │   ├── pages/              # ページレベルコンポーネント
+│   │   │   └── sections/           # セクションレベルコンポーネント
+│   │   └── lib/                     # ユーティリティ
+│   └── package.json
+├── backend/                          # FastAPI + Python
+│   ├── app/
+│   │   ├── routers/                 # API endpoints
+│   │   ├── schemas/                 # Pydantic models
+│   │   ├── services/                # Business logic
+│   │   ├── repositories/            # Data access
+│   │   ├── core/                    # Core utilities
+│   │   ├── deps/                    # Dependencies
+│   │   ├── settings.py              # Configuration
+│   │   └── main.py                  # Application entry
+│   ├── requirements.txt
+│   └── pyproject.toml               # Linter settings
+└── README.md
+```
+
+---
+
+## 🎨 Context Detection（コンテキスト検出）
+
+### 自動判定ルール
+
+AIは以下の情報からコンテキストを判断する：
+
+1. **ファイルパス**
+   - `frontend/` 配下 → フロントエンドルール適用
+   - `backend/` 配下 → バックエンドルール適用
+
+2. **ファイル拡張子**
+   - `.tsx`, `.ts`, `.jsx`, `.js`, `.css` → フロントエンド
+   - `.py` → バックエンド
+
+3. **ユーザーの言及**
+   - 「React」「Next.js」「UI」「コンポーネント」 → フロントエンド
+   - 「FastAPI」「API」「Python」「エンドポイント」 → バックエンド
+
+4. **添付ファイル**
+   - `@docs/frontend-rules.md` 添付 → フロントエンドルール優先
+   - `@docs/backend-rules.md` 添付 → バックエンドルール優先
+
+---
+
+## 📚 Detailed Rules（詳細ルール）
+
+### フロントエンド作業時
+
+**詳細ルールファイル**: `docs/frontend-rules.md`
+
+チャット時に以下のように添付して使用：
+```
+📎 @docs/frontend-rules.md
+
+【厳守】frontend-rules.md に従って実装してください。
+
+（作業内容）
+```
+
+**Tech Stack**: React 18+, Next.js 14+, TypeScript, Tailwind CSS, Three.js, React Three Fiber, Next UI
+
+---
+
+### バックエンド作業時
+
+**詳細ルールファイル**: `docs/backend-rules.md`
+
+チャット時に以下のように添付して使用：
+```
+📎 @docs/backend-rules.md
+
+【厳守】backend-rules.md に従って実装してください。
+
+（作業内容）
+```
+
+**Tech Stack**: Python 3.11+, FastAPI 0.115+, Pydantic v2, Uvicorn 0.30+
+
+---
+
+## 🔍 Verification（検証）
+
+### 実装後の確認事項
+
+すべてのコード生成後に以下を確認すること：
+
+- [ ] 添付されたルールファイルに準拠しているか
+- [ ] 命名規則に違反していないか
+- [ ] 必要なコメントが記載されているか
+- [ ] 未使用の変数・関数がないか
+- [ ] 共通処理を適切に使用しているか
+- [ ] Linter エラーがないか
+
+---
+
+## 🚨 Error Handling（エラーハンドリング）
+
+### AIの動作指針
+
+1. **ルール違反を発見したら必ず指摘**
+   - 既存コードに違反がある場合も指摘
+   - 修正案を具体的に提示
+
+2. **不明点があれば質問**
+   - 要件が曖昧な場合は推測せず質問
+   - 複数の解釈がある場合は選択肢を提示
+
+3. **変更の影響範囲を明示**
+   - 共通処理の修正時は特に注意
+   - 影響を受けるファイル・機能を列挙
+
+---
+
+## 📖 Reference（参考情報）
+
+- **チャットテンプレート**: `docs/templates.md`
+- **フロントエンド規約**: `docs/frontend-rules.md`
+- **バックエンド規約**: `docs/backend-rules.md`
+- **README**: `README.md`
+- **セットアップガイド**: `SETUP_GUIDE.md`
+
+---
+
+**Note**: このファイルは全チームメンバーが編集可能です。ルールの追加・修正があれば更新してください。
+
