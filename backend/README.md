@@ -58,16 +58,27 @@ CORS_ORIGINS=http://localhost:3000
 
 ## 💻 使用方法
 
+> **📌 重要**: `run.py`は`typer`ベースのCLIツールです。サブコマンド形式で実行してください。
+
 ### FastAPIサーバーの起動
 
 ```bash
+# 基本起動（開発モード：自動リロード有効）
 python run.py server
 
 # オプション指定
-python run.py server --host 0.0.0.0 --port 8000 --reload
+python run.py server --host 0.0.0.0 --port 8000 --no-reload
+
+# ヘルプ表示
+python run.py --help
+python run.py server --help
 ```
 
 APIドキュメント: http://localhost:8000/docs
+
+**利用可能なサブコマンド**:
+- `server` - FastAPIサーバーを起動
+- `summarize-meeting` - 会議要約を生成（詳細は下記参照）
 
 ### 音声認識（ASR）のセットアップ
 
@@ -96,18 +107,39 @@ WHISPER_MODEL_PATH=./whisper-cpp/models/ggml-base.bin
 ### 会議要約CLI
 
 ```bash
-# ファイルからJSON形式で要約生成
+# ファイルからJSON形式で要約生成（標準出力）
 python run.py summarize-meeting --file ./sample_transcript.txt
 
+# ファイルに保存（推奨）
+python run.py summarize-meeting \
+  --file ./sample_transcript.txt \
+  --output ./data/summaries/summary.json
+
 # Markdown形式で出力
-python run.py summarize-meeting --file ./sample_transcript.txt --format markdown
+python run.py summarize-meeting \
+  --file ./sample_transcript.txt \
+  --output ./data/summaries/summary.md \
+  --format markdown
 
 # 標準入力から読み込み
 cat transcript.txt | python run.py summarize-meeting
 
 # 詳細ログを表示
-python run.py summarize-meeting --file ./sample_transcript.txt --verbose
+python run.py summarize-meeting \
+  --file ./sample_transcript.txt \
+  --output ./data/summaries/summary.json \
+  --verbose
+
+# ヘルプ表示
+python run.py summarize-meeting --help
 ```
+
+**オプション**:
+- `--file` / `-f` : 入力ASRテキストファイルのパス（未指定時はSTDIN）
+- `--output` / `-o` : 出力先ファイルパス（未指定時は標準出力）
+- `--format` : 出力形式（`json` または `markdown`、デフォルト: `json`）
+- `--keep-noise` : フィラー削除を弱める（原文優先）
+- `--verbose` / `-v` : 詳細ログを表示
 
 詳細は **[会議要約機能ガイド](./MEETING_SUMMARY_GUIDE.md)** を参照してください。
 
@@ -240,9 +272,11 @@ echo $OPENAI_API_KEY      # Linux/Mac
 
 ### 2025-01-16
 - 🆕 会議要約機能を追加（Azure AI Foundry Responses API使用）
+- ⚙️ `run.py`を`typer`ベースのCLIツールに変更（サブコマンド形式）
 - CLIコマンド `summarize-meeting` を実装
 - 長文ASRテキストのチャンク分割・統合機能
 - JSON/Markdown両形式の出力対応
+- `--output`オプションで要約の保存先を指定可能
 
 ### 以前のバージョン
 - FastAPI基盤実装
