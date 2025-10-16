@@ -44,19 +44,24 @@ meeting-facilitation-ai-poc/
 ```bash
 cd backend
 
-# 仮想環境作成
-python -m venv .venv
+# (任意) 実行ポリシー調整（有効化時にブロックされる場合のみ）
+# Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
-# 仮想環境有効化 (Windows PowerShell)
+# 仮想環境作成（推奨: 3.11）※未導入なら先に 3.11 をインストール
+py -3.11 -m venv .venv
+# 3.13 利用時は: py -3.13 -m venv .venv
+
+# 仮想環境有効化
 .\.venv\Scripts\Activate.ps1
 
-# 依存関係インストール
+# 依存関係インストール（フォーム/ファイル受付の必須: python-multipart）
 pip install -r requirements.txt
+pip install python-multipart
 
-# 環境変数設定
-cp .env.example .env
+# 環境変数ファイル
+copy .env.example .env
 
-# サーバー起動
+# サーバ起動
 python run.py
 ```
 
