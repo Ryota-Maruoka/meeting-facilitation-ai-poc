@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     
     # データベース
     data_dir: str = "./data"
+    summaries_dir: str = "./data/summaries"
     
     # 外部API
     openai_api_key: str = ""
@@ -27,11 +28,19 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     
     # ASR設定
-    asr_provider: str = "whisper_cpp"
+    asr_provider: str = "whisper_cpp"  # Whisper.cpp実装を使用
     whisper_model_path: str = "./whisper-cpp/models/ggml-base.bin"
-    whisper_executable_path: str = "./main.exe"  # Windowsの実行ファイル
+    whisper_executable_path: str = "./main.exe"  # Windowsの実行ファイル（backendディレクトリ直下）
     asr_language: str = "ja"
     asr_temperature: float = 0.0
+    
+    # Azure OpenAI設定（会議要約用）
+    azure_openai_endpoint: str = ""
+    azure_openai_api_key: str = ""
+    azure_openai_api_version_responses: str = "2025-04-01"
+    azure_openai_api_version_chat: str = "2024-12-01-preview"
+    azure_openai_deployment: str = "gpt-4o-mini"
+    default_timezone: str = "Asia/Tokyo"
 
 
 settings = Settings()
