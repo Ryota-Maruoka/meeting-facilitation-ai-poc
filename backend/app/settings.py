@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     
     # ASR設定
-    asr_provider: str = "stub"  # 一時的にスタブ実装に切り替え
+    asr_provider: str = "whisper_cpp"  # Whisper.cpp実装を使用
     whisper_model_path: str = "./whisper-cpp/models/ggml-base.bin"
-    whisper_executable_path: str = "./main.exe"  # Windowsの実行ファイル
+    whisper_executable_path: str = "./main.exe"  # Windowsの実行ファイル（backendディレクトリ直下）
     asr_language: str = "ja"
     asr_temperature: float = 0.0
     

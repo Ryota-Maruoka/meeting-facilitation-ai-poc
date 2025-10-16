@@ -133,6 +133,7 @@ def find_whisper_executable() -> str:
     
     # 一般的な場所を検索
     possible_paths = [
+        "./main.exe",  # backendディレクトリ直下
         "./whisper-cpp/main.exe",
         "./whisper-cpp/whisper.exe",
         "./whisper/whisper.exe",
