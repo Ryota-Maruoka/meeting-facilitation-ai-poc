@@ -23,18 +23,59 @@
 
 ```
 meeting-facilitation-ai-poc/
-├── backend/          # FastAPI バックエンド
+├── backend/                                # FastAPI バックエンド
 │   ├── app/
-│   │   ├── main.py           # APIエンドポイント
-│   │   ├── storage.py        # JSONデータストア
-│   │   └── services/         # ASR/LLM/Slack/脱線検知
-│   ├── requirements.txt
-│   └── run.py
+│   │   ├── main.py                         # エントリーポイント（FastAPI起動）
+│   │   │
+│   │   ├── schemas/                        # Pydanticモデル（データ構造定義）
+│   │   │   ├── __init__.py
+│   │   │   ├── meeting.py                  # Meeting, MeetingCreate, AgendaItem
+│   │   │   ├── transcript.py               # TranscriptChunk（文字起こし結果）
+│   │   │   ├── summary.py                  # MiniSummary, Decision, ActionItem
+│   │   │   ├── parking.py                  # ParkingItem
+│   │   │   └── slack.py                    # SlackPayload
+│   │   │
+│   │   ├── routers/                        # APIルーター（機能別エンドポイント）
+│   │   │   ├── __init__.py
+│   │   │   ├── meetings.py                 # 会議CRUD（作成・取得・更新）
+│   │   │   ├── transcripts.py              # 音声文字起こし（Whisper連携）
+│   │   │   ├── summaries.py                # 要約・分析・脱線検知
+│   │   │   ├── decisions.py                # 決定事項・アクション項目
+│   │   │   ├── parking.py                  # Parking Lot（後回し項目管理）
+│   │   │   └── slack.py                    # Slack通知・連携処理
+│   │   │
+│   │   ├── services/                       # 各種業務ロジック
+│   │   │   ├── asr_service.py              # Whisper.cpp / OpenAI Whisper 呼び出し
+│   │   │   ├── llm_service.py              # LLM（GPT）要約・脱線検知
+│   │   │   ├── slack_service.py            # Slack API連携
+│   │   │   └── parking_service.py          # Parking管理ロジック
+│   │   │
+│   │   ├── core/                           # 共通ユーティリティ（設定・ログ等）
+│   │   │   ├── config.py
+│   │   │   ├── logger.py
+│   │   │   └── utils.py
+│   │   │
+│   │   └── storage.py                      # JSONファイルを扱う軽量データストア
+│   │
+│   ├── whisper-cpp/                        # Whisper.cpp バイナリとモデル
+│   │   ├── main.exe                        # Whisper実行ファイル
+│   │   └── models/
+│   │       └── ggml-base.bin               # Whisperモデル
+│   │
+│   ├── requirements.txt                    # Python依存パッケージ
+│   ├── run.py                              # ローカル実行スクリプト
+│   └── .gitignore                          # Whisperモデル・音声ファイル除外
 │
-└── frontend/         # Next.js フロントエンド（予定）
+└── frontend/                               # Next.js フロントエンド
     └── src/
-        ├── app/              # 画面A, B, C, D
-        └── components/
+        ├── app/                            # 画面
+        │   ├── page.tsx
+        │   └── ...
+        └── components/                     # 共通UIコンポーネント
+            ├── Recorder.tsx                # 音声録音（MediaRecorder）
+            ├── TranscriptView.tsx          # 逐次文字起こし結果表示
+            ├── SummaryPanel.tsx            # 要約・決定事項表示
+            └── ParkingList.tsx             # Parking Lot表示
 ```
 
 ## セットアップ
