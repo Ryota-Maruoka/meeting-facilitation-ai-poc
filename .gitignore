@@ -48,6 +48,13 @@ backend/data/
 *.sqlite
 *.sqlite3
 
+# Whisper.cpp関連（モデルファイルとソースコード）
+backend/whisper-cpp/
+backend/whisper-cpp-source/
+backend/*.exe
+backend/*.dll
+backend/*.wav
+
 # IDE
 .vscode/
 .idea/
