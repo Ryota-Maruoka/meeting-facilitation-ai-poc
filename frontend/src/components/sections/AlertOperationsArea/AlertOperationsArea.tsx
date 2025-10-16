@@ -76,16 +76,17 @@ const AlertOperationsArea: FC<AlertOperationsAreaProps> = ({ meetingId, transcri
 
   // 文字起こし結果が3つ以上になったら脱線検知を実行
   // ただし、既に検知済みのものは再度検知しない
-  useEffect(() => {
-    // 3つ以上溜まっていて、かつ前回チェック時よりも増えている場合
-    if (transcripts.length >= 3 && transcripts.length > lastCheckedCount) {
-      console.log("📊 脱線検知トリガー:", { 
-        transcriptCount: transcripts.length, 
-        lastChecked: lastCheckedCount 
-      });
-      checkForDeviation();
-    }
-  }, [transcripts.length, meetingId]);
+  // ⚠️ 一時的にオフ（音声認識のテストのため）
+  // useEffect(() => {
+  //   // 3つ以上溜まっていて、かつ前回チェック時よりも増えている場合
+  //   if (transcripts.length >= 3 && transcripts.length > lastCheckedCount) {
+  //     console.log("📊 脱線検知トリガー:", { 
+  //       transcriptCount: transcripts.length, 
+  //       lastChecked: lastCheckedCount 
+  //     });
+  //     checkForDeviation();
+  //   }
+  // }, [transcripts.length, meetingId]);
 
   // 脱線検知を実行
   const checkForDeviation = async () => {

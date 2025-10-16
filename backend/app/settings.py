@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     # ASR設定
     asr_provider: str = "whisper_cpp"
     whisper_model_path: str = "./whisper-cpp/models/ggml-base.bin"
-    whisper_executable_path: str = "./whisper-cpp/main"
+    whisper_executable_path: str = "./main.exe"  # Windowsの実行ファイル
     asr_language: str = "ja"
     asr_temperature: float = 0.0
 

@@ -183,7 +183,7 @@ def parse_whisper_result(result: Dict[str, Any]) -> List[Dict]:
 
 async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
     """
-    音声ファイルを文字起こしする（新しいAPI用）
+    音声ファイルを文字起こしする（Whisper.cpp使用）
     
     Args:
         audio_file_path: 音声ファイルのパス
@@ -192,11 +192,13 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         文字起こし結果（テキスト、信頼度等）
     """
     try:
-        # 現在は開発用スタブ実装
-        # TODO: Whisper.cppの実行ファイルが利用可能になったら実際の実装に切り替え
+        import logging
+        logger = logging.getLogger(__name__)
         
-        # ファイルサイズをチェック（実際の音声ファイルかどうかの簡易判定）
+        # ファイルサイズをチェック
         file_size = os.path.getsize(audio_file_path)
+        logger.info(f"文字起こし開始: {audio_file_path} ({file_size} bytes)")
+        
         if file_size < 1000:  # 1KB未満は無効なファイル
             return {
                 "text": "音声ファイルが小さすぎます",
@@ -204,31 +206,95 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 "language": "ja"
             }
         
-        # 開発用のモック文字起こし結果
-        mock_transcripts = [
-            "会議を開始いたします。",
-            "本日は要件すり合わせについて話し合います。",
-            "認証方式について検討しましょう。",
-            "JWTとMTLSの比較を行います。",
-            "セキュリティ要件を確認する必要があります。",
-            "運用負荷についても考慮しましょう。",
-            "次回までに検討事項をまとめます。",
+        # Whisper.cppの実行ファイルを検索
+        whisper_exe = find_whisper_executable()
+        if not whisper_exe:
+            logger.error("Whisper.cppの実行ファイルが見つかりません")
+            raise FileNotFoundError("Whisper.cpp executable not found")
+        
+        logger.info(f"Whisper.cpp実行ファイル: {whisper_exe}")
+        
+        # 設定からモデルパスを取得
+        from ..settings import settings
+        model_path = settings.whisper_model_path
+        
+        if not os.path.exists(model_path):
+            logger.error(f"モデルファイルが見つかりません: {model_path}")
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        
+        logger.info(f"モデルファイル: {model_path}")
+        
+        # Whisper.cppを実行（標準出力からテキストを取得）
+        cmd = [
+            whisper_exe,
+            "-m", model_path,  # モデルファイル
+            "-f", audio_file_path,  # 入力ファイル
+            "-l", settings.asr_language,  # 言語
+            "-t", str(int(settings.asr_temperature)),  # 温度（整数）
+            "-nt",  # テキストのみ出力（タイムスタンプなし）
         ]
         
-        # ファイルサイズに応じて異なる結果を返す（リアルタイム感を演出）
-        selected_text = random.choice(mock_transcripts)
+        logger.info(f"Whisper.cppコマンド: {' '.join(cmd)}")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,  # 60秒タイムアウト
+            cwd=os.path.dirname(os.path.abspath(whisper_exe))
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"Whisper.cppエラー (returncode={result.returncode})")
+            logger.error(f"stderr: {result.stderr}")
+            logger.error(f"stdout: {result.stdout}")
+            raise RuntimeError(f"Whisper.cpp failed: {result.stderr}")
+        
+        logger.info("Whisper.cpp実行成功")
+        
+        # 標準出力からテキストを取得
+        text = result.stdout.strip()
+        
+        # 空の場合はstderrも確認（Whisper.cppはstderrに出力する場合がある）
+        if not text and result.stderr:
+            # stderrから [BLANK_AUDIO] などのマーカーを除外してテキストを抽出
+            lines = result.stderr.split('\n')
+            for line in lines:
+                # タイムスタンプ付きの文字起こし行を探す
+                # 例: [00:00:00.000 --> 00:00:05.000]  こんにちは
+                if '-->' in line and ']' in line:
+                    # タイムスタンプの後のテキストを抽出
+                    text_part = line.split(']', 1)[-1].strip()
+                    if text_part and not text_part.startswith('['):
+                        text += text_part + " "
+        
+        text = text.strip()
+        
+        # テキストが空の場合
+        if not text:
+            logger.warning("文字起こし結果が空です（無音または認識不可）")
+            return {
+                "text": "",  # 空の文字列を返す
+                "confidence": 0.0,
+                "language": settings.asr_language
+            }
+        
+        logger.info(f"文字起こし結果: {text[:100] if len(text) > 100 else text}")
         
         return {
-            "text": selected_text,
-            "confidence": 0.95,
-            "language": "ja"
+            "text": text,
+            "confidence": 0.95,  # Whisper.cppは信頼度を返さないため固定値
+            "language": settings.asr_language
         }
         
     except Exception as e:
-        print(f"ASR error: {e}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"ASR error: {e}", exc_info=True)
+        
         # エラー時はスタブデータを返す
         return {
-            "text": "音声認識エラーが発生しました。",
+            "text": f"[エラー] 音声認識に失敗しました: {str(e)}",
             "confidence": 0.0,
             "language": "ja"
         }

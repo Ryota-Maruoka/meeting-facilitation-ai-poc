@@ -11,6 +11,8 @@ import {
   ListItemText,
   CircularProgress,
   Alert,
+  Card,
+  CardContent,
 } from "@mui/material";
 import {
   Mic as MicIcon,
@@ -23,9 +25,6 @@ import type { Transcript } from "@/lib/types";
 
 type LiveTranscriptAreaProps = {
   meetingId: string;
-  isRecording: boolean;
-  onStartRecording: () => void;
-  onStopRecording: () => void;
   onTranscriptsUpdate?: (transcripts: Transcript[]) => void;
 };
 
@@ -41,18 +40,17 @@ type TranscriptItem = {
  * セクションレベルコンポーネント: ライブ字幕表示エリア
  * 
  * 音声録音とリアルタイム文字起こし結果を表示
+ * 録音状態を内部で管理し、自動録音にも対応
  */
 const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   meetingId,
-  isRecording,
-  onStartRecording,
-  onStopRecording,
   onTranscriptsUpdate,
 }) => {
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
   
   // 音声録音関連のref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -126,9 +124,16 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
             }
           }, 100);
           
-          // 親コンポーネントに文字起こし結果を通知
+          // 親コンポーネントに文字起こし結果を通知（Transcript型に変換）
           if (onTranscriptsUpdate) {
-            onTranscriptsUpdate(updated);
+            const transcriptData: Transcript[] = updated.map(t => ({
+              id: t.id,
+              meetingId,
+              timestamp: t.timestamp,
+              text: t.text,
+              speaker: t.speaker,
+            }));
+            onTranscriptsUpdate(transcriptData);
           }
           
           return updated;
@@ -198,7 +203,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       // 録音開始
       mediaRecorder.start(5000); // 5秒ごとにチャンクを生成
       
-      onStartRecording();
+      setIsRecording(true);
     } catch (err) {
       console.error("録音開始エラー:", err);
       if (err instanceof Error) {
@@ -213,7 +218,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
         setError("録音開始に失敗しました");
       }
     }
-  }, [onStartRecording, sendAudioChunk]);
+  }, [sendAudioChunk]);
 
   // 録音停止
   const stopRecording = useCallback(() => {
@@ -226,31 +231,46 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       streamRef.current = null;
     }
     
-    onStopRecording();
-  }, [onStopRecording]);
+    setIsRecording(false);
+  }, []);
 
-  // 録音状態の変更を監視
+  // コンポーネントのクリーンアップ時に録音を停止
   useEffect(() => {
-    if (isRecording) {
-      startRecording();
-    } else {
-      stopRecording();
-    }
-  }, [isRecording, startRecording, stopRecording]);
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   // ブラウザサポート状況の確認
   if (!isSupported) {
     return (
-      <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
-          このブラウザは音声録音をサポートしていません。Chrome、Firefox、Safariの最新版をご利用ください。
-        </Alert>
-      </Box>
+      <Card sx={{ height: "500px" }}>
+        <CardContent>
+          <Alert severity="error">
+            このブラウザは音声録音をサポートしていません。Chrome、Firefox、Safariの最新版をご利用ください。
+          </Alert>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+    <Card sx={{ height: "500px" }}>
+      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+        <Typography
+          variant="h6"
+          gutterBottom
+          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+        >
+          <MicIcon color="primary" />
+          ライブ字幕
+        </Typography>
+        <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
       {/* 録音コントロール */}
       <Box sx={{ mb: 2, display: "flex", gap: 2, justifyContent: "center", alignItems: "center" }}>
         {!isRecording ? (
@@ -258,7 +278,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
             variant="contained"
             color="error"
             startIcon={<MicIcon />}
-            onClick={() => onStartRecording()}
+            onClick={startRecording}
             size="large"
             disabled={isProcessing}
           >
@@ -270,7 +290,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
               variant="outlined"
               color="error"
               startIcon={<StopIcon />}
-              onClick={() => onStopRecording()}
+              onClick={stopRecording}
               size="large"
               disabled={isProcessing}
             >
@@ -434,7 +454,9 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
           </Typography>
         </Box>
       )}
-    </Box>
+        </Box>
+      </CardContent>
+    </Card>
   );
 };
 
