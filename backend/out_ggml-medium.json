@@ -1,0 +1,131 @@
+{
+	"systeminfo": "AVX = 1 | AVX2 = 1 | AVX512 = 0 | FMA = 1 | NEON = 0 | ARM_FMA = 0 | METAL = 0 | F16C = 1 | FP16_VA = 0 | WASM_SIMD = 0 | BLAS = 0 | SSE3 = 1 | SSSE3 = 0 | VSX = 0 | CUDA = 0 | COREML = 0 | OPENVINO = 0 | ",
+	"model": {
+		"type": "medium",
+		"multilingual": true,
+		"vocab": 51865,
+		"audio": {
+			"ctx": 1500,
+			"state": 1024,
+			"head": 16,
+			"layer": 24
+		},
+		"text": {
+			"ctx": 448,
+			"state": 1024,
+			"head": 16,
+			"layer": 24
+		},
+		"mels": 80,
+		"ftype": 1
+	},
+	"params": {
+		"model": ".\\whisper-cpp\\models\\ggml-medium.bin",
+		"language": "ja",
+		"translate": false
+	},
+	"result": {
+		"language": "ja"
+	},
+	"transcription": [
+		{
+			"timestamps": {
+				"from": "00:00:00,000",
+				"to": "00:00:11,440"
+			},
+			"offsets": {
+				"from": 0,
+				"to": 11440
+			},
+			"text": "割当てられたタスクに対してかなり 責任感を持って対応いただいてる"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:11,440",
+				"to": "00:00:18,240"
+			},
+			"offsets": {
+				"from": 11440,
+				"to": 18240
+			},
+			"text": "というような認識をしております ので プロジェクトの貢献度はかなり"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:18,240",
+				"to": "00:00:26,760"
+			},
+			"offsets": {
+				"from": 18240,
+				"to": 26760
+			},
+			"text": "高いかなというふうに思っております いつもありがとうございます 発表に関して"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:26,760",
+				"to": "00:00:32,000"
+			},
+			"offsets": {
+				"from": 26760,
+				"to": 32000
+			},
+			"text": "もすごくいい発表されてたかな と思うんですけれども ちょっと"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:32,000",
+				"to": "00:00:39,280"
+			},
+			"offsets": {
+				"from": 32000,
+				"to": 39280
+			},
+			"text": "1点だけ 別に意地悪とかそうなん じゃないですけど 今後の課題とか"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:39,280",
+				"to": "00:00:47,600"
+			},
+			"offsets": {
+				"from": 39280,
+				"to": 47600
+			},
+			"text": "取り組みとかっていう記載があった と思うんですけど 2年目以降 来月"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:47,600",
+				"to": "00:00:53,160"
+			},
+			"offsets": {
+				"from": 47600,
+				"to": 53160
+			},
+			"text": "から2年目になると思うんですけど 今後 どういう意識で仕事に取り"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:53,160",
+				"to": "00:00:58,040"
+			},
+			"offsets": {
+				"from": 53160,
+				"to": 58040
+			},
+			"text": "組んでいくのかというのを聞いて もいいですか"
+		},
+		{
+			"timestamps": {
+				"from": "00:00:58,040",
+				"to": "00:01:08,360"
+			},
+			"offsets": {
+				"from": 58040,
+				"to": 68360
+			},
+			"text": "吉田:今はまだ1年目という甘い もあって 他の方の助けを前提として"
+		}
+	]
+}

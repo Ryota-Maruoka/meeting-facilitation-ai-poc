@@ -8,8 +8,13 @@
     "start": "next start"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.4",
+    "@mui/material": "^7.3.4",
+    "@nextui-org/react": "^2.6.11",
     "lucide-react": "^0.454.0",
-    "next": "14.2.5",
+    "next": "^14.2.33",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },

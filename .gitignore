@@ -48,6 +48,14 @@ backend/data/
 *.sqlite
 *.sqlite3
 
+# Whisper.cpp関連（モデルファイルとソースコード）
+# モデルファイルは各自でダウンロード（setup_free_asr.pyを参照）
+backend/whisper-cpp/
+backend/whisper-cpp-source/
+backend/*.exe
+backend/*.dll
+backend/*.wav
+
 # IDE
 .vscode/
 .idea/

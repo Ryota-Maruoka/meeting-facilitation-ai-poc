@@ -1,204 +1,237 @@
 "use client";
-import { useMemo, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Dot, Square, FileText, TriangleAlert, RotateCcw, ParkingSquare, X, Eye, Pencil, Copy, Trash2 } from "lucide-react";
 
-function Pill({ children, active=false }: { children: React.ReactNode; active?: boolean }) {
-  return <span className={`px-2.5 py-1 rounded-full text-xs border ${active?"bg-indigo-50 border-indigo-200 text-indigo-700":"bg-gray-50 border-gray-200 text-gray-700"}`}>{children}</span>
-}
+import { FC } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { 
+  Container, 
+  Typography, 
+  Box, 
+  Alert, 
+  CircularProgress, 
+  Card, 
+  CardContent,
+  Button,
+  Chip,
+  Paper
+} from "@mui/material";
+import Grid from "@mui/material/Grid";
+import { 
+  PlayArrow as PlayArrowIcon, 
+  ArrowBack as ArrowBackIcon,
+  People as PeopleIcon,
+  Schedule as ScheduleIcon,
+  Assignment as AssignmentIcon,
+  RecordVoiceOver as RecordIcon
+} from "@mui/icons-material";
+import { useMeeting } from "@/hooks/useMeeting";
 
-function Section({ title, star=false, children }: { title: string; star?: boolean; children: React.ReactNode }) {
+/**
+ * ページレベルコンポーネント: 会議詳細画面
+ * 
+ * 会議の詳細情報を表示し、会議中画面への遷移を提供
+ */
+const MeetingDetailPage: FC = () => {
+  const params = useParams();
+  const router = useRouter();
+  const meetingId = params.id as string;
+  const { meeting, isLoading, error } = useMeeting(meetingId);
+
+  const handleStartMeeting = () => {
+    // 会議開始処理：会議中画面に遷移
+    router.push(`/meetings/${meetingId}/active`);
+  };
+
+  const handleEndMeeting = () => {
+    // 会議終了処理（後で実装）
+    console.log("会議を終了:", meetingId);
+  };
+
+  if (isLoading) {
+    return (
+      <Container maxWidth="lg" sx={{ py: 4, textAlign: "center" }}>
+        <CircularProgress />
+        <Typography variant="body1" sx={{ mt: 2 }}>
+          会議情報を読み込み中...
+        </Typography>
+      </Container>
+    );
+  }
+
+  if (error || !meeting) {
   return (
-    <section className="mt-5">
-      <h3 className="text-sm font-semibold mb-2">{title} {star && <span className="text-amber-500">★</span>}</h3>
-      <div className="rounded-2xl border bg-white">{children}</div>
-    </section>
-  );
-}
-
-export default function MeetingLivePage() {
-  const [remain, setRemain] = useState("12:34");
-  const [showDeviation, setShowDeviation] = useState(false);
-
-  const captions = [
-    { t: "00:05", text: "現状はJWT検討しています。利点としては 実装の容易さと..." },
-    { t: "00:42", text: "MTLS案の懸念は運用コストです。特に証明 書の..." },
-    { t: "01:15", text: "要件SLAは99.99%以上必要です。これを満 たすには..." },
-  ];
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Alert severity="error">
+          エラー: {error || "会議が見つかりません"}
+        </Alert>
+      </Container>
+    );
+  }
 
   return (
-    <main className="min-h-screen p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="rounded-2xl shadow bg-white">
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
           {/* ヘッダー */}
-          <div className="border-b px-4 md:px-6 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/meetings/new" className="rounded-xl border px-2.5 py-1.5 bg-white hover:bg-gray-50"><ChevronLeft size={16}/></Link>
-              <div className="text-sm">会議名：要件すり合わせ</div>
-              <div className="flex items-center gap-1 text-sm">録音：<Dot className="text-red-500"/> </div>
-              <div className="text-sm">残り：<span className="font-semibold">{remain}</span> <span className="text-amber-500">★</span></div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/meetings/0001/summary" className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 bg-white hover:bg-gray-50"><FileText size={16}/> サマリ出力 <span className="text-amber-500">★</span></Link>
-              <button className="inline-flex items-center gap-2 rounded-xl bg-rose-600 text-white px-3 py-2"><Square size={14}/> 終了</button>
-            </div>
-          </div>
+      <Box
+        sx={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+          py: 6,
+        }}
+      >
+        <Container maxWidth="lg">
+          <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
+            <Button
+              startIcon={<ArrowBackIcon />}
+              onClick={() => router.back()}
+              sx={{ 
+                color: "white", 
+                mr: 2,
+                "&:hover": { bgcolor: "rgba(255,255,255,0.1)" }
+              }}
+            >
+              戻る
+            </Button>
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
+              会議詳細
+            </Typography>
+          </Box>
+        </Container>
+      </Box>
 
-          {/* アジェンダ進捗バー */}
-          <div className="border-b px-4 md:px-6 py-3">
-            <h4 className="text-sm font-semibold">アジェンダ進捗バー <span className="text-amber-500">★</span></h4>
-            <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-xl border bg-gray-50 px-3 py-2 flex items-center justify-between">
-                <div className="text-sm">1. 認証方式の確認</div>
-                <Pill active>5/10m</Pill>
-              </div>
-              <div className="rounded-xl border bg-gray-50 px-3 py-2 flex items-center justify-between">
-                <div className="text-sm">2. API方針の確認</div>
-                <Pill>0/10m</Pill>
-              </div>
-              <div className="rounded-xl border bg-gray-50 px-3 py-2 flex items-center justify-between">
-                <div className="text-sm">3. 次アクション決定</div>
-                <Pill>0/5m</Pill>
-              </div>
-            </div>
-          </div>
-
-          {/* 3カラムレイアウト */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 px-4 md:px-6 py-5">
-            {/* ライブ字幕 */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">ライブ字幕 <span className="text-amber-500">★</span></h4>
-              <div className="rounded-2xl border bg-white p-4 space-y-3">
-                {captions.map((c, i)=> (
-                  <div key={i}>
-                    <div className="text-xs text-gray-500">{c.t}</div>
-                    <div className="mt-1 text-sm">「{c.text}」</div>
-                  </div>
-                ))}
-                <div className="text-xs text-gray-400">…（30-60秒で追記）</div>
-              </div>
-            </div>
-
-            {/* ミニ要約 */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">ミニ要約 <span className="text-amber-500">★</span></h4>
-              <div className="rounded-2xl border bg-white p-4 space-y-3">
-                <div>
-                  <div className="text-xs font-semibold">【決定】</div>
-                  <div className="mt-1 text-sm">・（空）</div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold">【未決】</div>
-                  <div className="mt-1 text-sm space-y-0.5">
-                    <div>・認可方式（JWT vs MTLS）</div>
-                    <div className="ml-3">├不足：基盤運用方針</div>
-                    <div className="ml-3">└次の一手：PoC比較 <span className="text-amber-500">★</span></div>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs font-semibold">【アクション】</div>
-                  <div className="mt-1 text-sm">・佐藤：JWT PoC 10/18 <span className="text-amber-500">★</span></div>
-                </div>
-              </div>
-            </div>
-
-            {/* アラート/操作 */}
-            <div>
-              <h4 className="text-sm font-semibold mb-2">アラート/操作 <span className="text-amber-500">★</span></h4>
-              <div className="rounded-2xl border bg-white p-4 space-y-3">
-                {/* アラート */}
-                <div className="rounded-xl border bg-amber-50 p-3 flex items-start gap-2">
-                  <TriangleAlert className="mt-0.5 flex-shrink-0" size={16}/>
-                  <div className="text-sm">脱線の可能性：直近2:10が「雑談」類似。<span className="text-amber-500">★</span></div>
-                </div>
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Grid container spacing={3}>
+          {/* 会議基本情報 */}
+          <Grid item xs={12}>
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 600 }}>
+                  {meeting.title}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                  <strong>目的:</strong> {meeting.purpose}
+                </Typography>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                  <strong>期待する成果物:</strong> {meeting.expectedOutcome}
+                </Typography>
                 
-                {/* 操作ボタン */}
-                <div className="grid grid-cols-1 gap-2">
-                  <button onClick={()=>setShowDeviation(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs bg-white hover:bg-gray-50">
-                    <RotateCcw size={14}/> 軌道修正して議題1へ <span className="text-amber-500">★</span>
-                  </button>
-                  <button onClick={()=>setShowDeviation(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs bg-white hover:bg-gray-50">
-                    <ParkingSquare size={14}/> Parking Lotへ退避 <span className="text-amber-500">★</span>
-                  </button>
-                  <button onClick={()=>setShowDeviation(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs bg-white hover:bg-gray-50">
-                    <X size={14}/> 無視 <span className="text-amber-500">★</span>
-                  </button>
-                </div>
+                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mb: 2 }}>
+                  <Chip
+                    icon={<PeopleIcon />}
+                    label={`参加者 ${meeting.participants.length}名`}
+                    color="primary"
+                    variant="outlined"
+                  />
+                  <Chip
+                    icon={<ScheduleIcon />}
+                    label={`合計時間 ${meeting.agenda?.reduce((total, item) => total + item.duration, 0) || 0}分`}
+                    color="secondary"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={meeting.status === "draft" ? "下書き" : "準備完了"}
+                    color={meeting.status === "draft" ? "default" : "success"}
+                    variant="filled"
+                  />
+                  <Chip
+                    icon={<RecordIcon />}
+                    label={meeting.recordingConsent ? "録音同意済み" : "録音未同意"}
+                    color={meeting.recordingConsent ? "success" : "warning"}
+                    variant="outlined"
+                  />
+                </Box>
 
-                {/* Parking Lot */}
-                <div className="border-t pt-3">
-                  <div className="text-sm font-semibold mb-2">Parking Lot： 3件 <span className="text-amber-500">★</span></div>
-                  <div className="text-sm space-y-1 mb-3">
-                    <div>1. ABテスト基盤の統合案</div>
-                    <div>2. 権限設計の見直し</div>
-                    <div>3. 負荷試験計画</div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    <button className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs bg-white hover:bg-gray-50">
-                      <Eye size={14}/> 一覧表示
-                    </button>
-                    <button className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs bg-white hover:bg-gray-50">
-                      <Pencil size={14}/> 次回アジェンダ化
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={<PlayArrowIcon />}
+                  onClick={handleStartMeeting}
+                  sx={{ 
+                    bgcolor: "success.main",
+                    "&:hover": { bgcolor: "success.dark" }
+                  }}
+                >
+                  会議を開始
+                </Button>
+              </CardContent>
+            </Card>
+          </Grid>
 
-          {/* クイック操作 */}
-          <div className="border-t px-4 md:px-6 py-4">
-            <h4 className="text-sm font-semibold mb-3">クイック操作 <span className="text-amber-500">★</span></h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50">
-                <FileText size={14}/> 決定として確定
-              </button>
-              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50">
-                <Copy size={14}/> 未決として保持
-              </button>
-              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50">
-                <Pencil size={14}/> アクション作成
-              </button>
-              <button className="inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50">
-                <Trash2 size={14}/> Slack送信 <span className="text-amber-500">★</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+          {/* 参加者 */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <PeopleIcon color="primary" />
+                  参加者
+                </Typography>
+                {meeting.participants.length > 0 ? (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                    {meeting.participants.map((participant, index) => (
+                      <Chip
+                        key={index}
+                        label={participant}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    参加者が設定されていません
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
 
-      {/* 画面C: 脱線モーダル */}
-      {showDeviation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={()=>setShowDeviation(false)} />
-          <div className="relative w-full max-w-2xl rounded-2xl shadow-xl bg-white border">
-            <div className="border-b px-5 py-3 text-sm font-semibold">議題からの逸脱を検知 <span className="text-amber-500">★</span></div>
-            <div className="px-5 py-4 space-y-3">
-              <div className="text-sm">直近 2分10秒 の会話は、アジェンダ「1. 認証方式の確認」との類似度が低い状態である。</div>
-              <div className="text-sm font-semibold">候補：</div>
-              <ul className="list-disc pl-5 text-sm space-y-1">
-                <li>現在の会話は「チーム雑談」に近い（関連度 0.23）</li>
-                <li>戻す先の議題候補：「1. 認証方式」「2. API方針」</li>
-              </ul>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50"><RotateCcw size={14}/> 議題1へ戻す</button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50"><ParkingSquare size={14}/> Parking Lotへ送る</button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50"><X size={14}/> 無視</button>
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-2">
-                <label className="text-sm">件名：</label>
-                <input defaultValue="会議室予約の話→次回運用会議で" className="w-full rounded-xl border px-3 py-2"/>
-                <label className="inline-flex items-center gap-2 text-sm mt-1">
-                  <input type="checkbox" defaultChecked className="size-4"/> 次回アジェンダに自動追加する <span className="text-amber-500">★</span>
-                </label>
-              </div>
-            </div>
-            <div className="border-t px-5 py-3 flex items-center justify-end gap-2">
-              <button onClick={()=>setShowDeviation(false)} className="rounded-xl border px-3 py-2 text-sm bg-white hover:bg-gray-50">閉じる</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </main>
+          {/* アジェンダ */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <AssignmentIcon color="primary" />
+                  アジェンダ
+                </Typography>
+                {meeting.agenda && meeting.agenda.length > 0 ? (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {meeting.agenda.map((item, index) => (
+                      <Paper
+                        key={item.id || index}
+                        sx={{
+                          p: 2,
+                          borderLeft: 4,
+                          borderLeftColor: "primary.main",
+                          bgcolor: "grey.50",
+                        }}
+                      >
+                        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+                          {index + 1}. {item.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                          時間: {item.duration}分
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          期待成果: {item.expectedOutcome}
+                        </Typography>
+                        {item.relatedUrl && (
+                          <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                            関連資料: {item.relatedUrl}
+                          </Typography>
+                        )}
+                      </Paper>
+                    ))}
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    アジェンダが設定されていません
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+      </Container>
+    </Box>
   );
-}
+};
+
+export default MeetingDetailPage;
