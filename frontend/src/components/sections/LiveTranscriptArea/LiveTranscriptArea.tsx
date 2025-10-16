@@ -19,6 +19,7 @@ import {
   MicOff as MicOffIcon,
   PlayArrow as PlayIcon,
   Stop as StopIcon,
+  Clear as ClearIcon,
 } from "@mui/icons-material";
 import { apiClient } from "@/lib/api";
 import type { Transcript } from "@/lib/types";
@@ -157,7 +158,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   const startRecording = useCallback(async () => {
     try {
       setError(null);
-      setTranscripts([]);
+      // 録音開始時は文字起こし結果をクリアしない（既存の結果を保持）
       
       // マイクアクセスを要求
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -234,6 +235,16 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
     setIsRecording(false);
   }, []);
 
+  // 文字起こし結果をクリア
+  const clearTranscripts = useCallback(() => {
+    setTranscripts([]);
+    setError(null);
+    // 親コンポーネントにも空の配列を通知
+    if (onTranscriptsUpdate) {
+      onTranscriptsUpdate([]);
+    }
+  }, [onTranscriptsUpdate]);
+
   // コンポーネントのクリーンアップ時に録音を停止
   useEffect(() => {
     return () => {
@@ -262,14 +273,29 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   return (
     <Card sx={{ height: "500px" }}>
       <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <Typography
-          variant="h6"
-          gutterBottom
-          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-        >
-          <MicIcon color="primary" />
-          ライブ字幕
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+          <Typography
+            variant="h6"
+            sx={{ display: "flex", alignItems: "center", gap: 1 }}
+          >
+            <MicIcon color="primary" />
+            ライブ字幕
+          </Typography>
+          
+          {/* クリアボタン */}
+          {transcripts.length > 0 && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ClearIcon />}
+              onClick={clearTranscripts}
+              disabled={isRecording || isProcessing}
+              sx={{ minWidth: "auto" }}
+            >
+              クリア
+            </Button>
+          )}
+        </Box>
         <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
       {/* 録音コントロール */}
       <Box sx={{ mb: 2, display: "flex", gap: 2, justifyContent: "center", alignItems: "center" }}>
