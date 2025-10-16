@@ -5,12 +5,92 @@ ASR (Automatic Speech Recognition) サービス
 """
 
 import os
+import io
 import subprocess
 import tempfile
 import json
 import random
 from typing import List, Dict, Any
 from pathlib import Path
+
+
+def convert_webm_to_wav(webm_data: bytes) -> bytes:
+    """
+    WebM形式の音声データをWAV（16kHz mono PCM）に変換
+    
+    Args:
+        webm_data: WebM形式の音声バイナリデータ
+        
+    Returns:
+        WAV形式の音声バイナリデータ
+    """
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # 一時ファイルを作成
+        with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_webm:
+            temp_webm.write(webm_data)
+            temp_webm.flush()
+            webm_path = temp_webm.name
+        
+        # WAV出力パス
+        wav_path = webm_path.replace('.webm', '.wav')
+        
+        try:
+            # ffmpegでWebM → WAV変換（16kHz mono PCM）
+            cmd = [
+                'ffmpeg',
+                '-y',  # 上書き確認なし
+                '-i', webm_path,  # 入力ファイル
+                '-ar', '16000',   # サンプルレート16kHz
+                '-ac', '1',       # モノラル
+                '-c:a', 'pcm_s16le',  # 16-bit PCM
+                wav_path
+            ]
+            
+            logger.info(f"ffmpeg変換開始: {' '.join(cmd)}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,  # 30秒タイムアウト
+                check=True
+            )
+            
+            # WAVファイルを読み込み
+            with open(wav_path, 'rb') as f:
+                wav_data = f.read()
+            
+            logger.info(f"ffmpeg変換完了: WebM -> WAV (16kHz mono, {len(wav_data)} bytes)")
+            return wav_data
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"ffmpeg変換エラー: {e}")
+            logger.error(f"stderr: {e.stderr}")
+            raise RuntimeError(f"ffmpeg conversion failed: {e.stderr}")
+        except subprocess.TimeoutExpired:
+            logger.error("ffmpeg変換がタイムアウトしました")
+            raise RuntimeError("ffmpeg conversion timeout")
+        except FileNotFoundError:
+            logger.error("ffmpegが見つかりません。ffmpegのインストールが必要です")
+            raise RuntimeError("ffmpeg is required for audio conversion. Please install ffmpeg.")
+        finally:
+            # 一時ファイルをクリーンアップ
+            try:
+                if os.path.exists(webm_path):
+                    os.unlink(webm_path)
+                if os.path.exists(wav_path):
+                    os.unlink(wav_path)
+            except Exception as cleanup_error:
+                logger.warning(f"一時ファイルのクリーンアップに失敗: {cleanup_error}")
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"音声変換エラー: {e}")
+        raise RuntimeError(f"Failed to convert WebM to WAV: {e}")
 
 
 def transcribe_audio(content: bytes, chunk_seconds: int = 30) -> List[Dict]:
@@ -219,6 +299,33 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 "language": "ja"
             }
         
+        # 音声ファイルの形式を確認し、必要に応じて変換
+        processed_audio_path = audio_file_path
+        
+        # WebMファイルの場合はWAVに変換
+        if audio_file_path.lower().endswith('.webm'):
+            logger.info("WebMファイルを検出、WAVに変換中...")
+            try:
+                with open(audio_file_path, 'rb') as f:
+                    webm_data = f.read()
+                
+                wav_data = convert_webm_to_wav(webm_data)
+                
+                # 変換されたWAVファイルを一時ファイルとして保存
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+                    temp_wav.write(wav_data)
+                    processed_audio_path = temp_wav.name
+                
+                logger.info(f"WebM変換完了: {processed_audio_path}")
+                
+            except Exception as e:
+                logger.error(f"WebM変換エラー: {e}")
+                return {
+                    "text": f"[エラー] 音声ファイルの変換に失敗しました: {str(e)}",
+                    "confidence": 0.0,
+                    "language": "ja"
+                }
+        
         # Whisper.cppの実行ファイルを検索
         whisper_exe = find_whisper_executable()
         if not whisper_exe:
@@ -241,7 +348,7 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         cmd = [
             whisper_exe,
             "-m", model_path,  # モデルファイル
-            "-f", audio_file_path,  # 入力ファイル
+            "-f", processed_audio_path,  # 入力ファイル（変換済み）
             "-l", settings.asr_language,  # 言語
             "-t", str(int(settings.asr_temperature)),  # 温度（整数）
             "-nt",  # テキストのみ出力（タイムスタンプなし）
@@ -293,6 +400,14 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
             }
         
         logger.info(f"文字起こし結果: {text[:100] if len(text) > 100 else text}")
+        
+        # 一時ファイルをクリーンアップ
+        if processed_audio_path != audio_file_path and os.path.exists(processed_audio_path):
+            try:
+                os.unlink(processed_audio_path)
+                logger.info("一時ファイルを削除しました")
+            except Exception as e:
+                logger.warning(f"一時ファイルの削除に失敗: {e}")
         
         return {
             "text": text,
