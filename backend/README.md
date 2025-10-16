@@ -69,6 +69,30 @@ python run.py server --host 0.0.0.0 --port 8000 --reload
 
 APIドキュメント: http://localhost:8000/docs
 
+### 音声認識（ASR）のセットアップ
+
+音声文字起こし機能を使用する場合、以下のいずれかの方法でASRを設定してください：
+
+#### オプション1: OpenAI Whisper API（簡単）
+```bash
+# .env ファイルに設定
+ASR_PROVIDER=openai_whisper
+OPENAI_API_KEY=your_actual_api_key_here
+```
+
+#### オプション2: Whisper.cpp（無料・ローカル）
+```bash
+# 自動セットアップ
+python setup_free_asr.py
+
+# または手動セットアップ
+ASR_PROVIDER=whisper_cpp
+WHISPER_EXECUTABLE_PATH=./whisper-cpp/whisper.exe
+WHISPER_MODEL_PATH=./whisper-cpp/models/ggml-base.bin
+```
+
+詳細は **[ASRセットアップガイド](./ASR_SETUP.md)** または **[無料ASR実装ガイド](./FREE_ASR_GUIDE.md)** を参照してください。
+
 ### 会議要約CLI
 
 ```bash
@@ -110,12 +134,18 @@ backend/
 │       ├── presenter.py           # 出力整形
 │       └── cli.py                 # CLIコマンド
 ├── data/                          # 会議データ保存先
+│   ├── meetings/                  # 会議データ（UUID形式）
+│   ├── summaries/                 # 要約データ（CLI出力）
+│   └── test/                      # テストデータ
 ├── run.py                         # エントリーポイント
 ├── requirements.txt               # Python依存関係
 ├── env.example                    # 環境変数サンプル
 ├── sample_transcript.txt          # サンプルASRテキスト
+├── setup_free_asr.py              # 無料ASR自動セットアップスクリプト
 ├── README.md                      # このファイル
-└── MEETING_SUMMARY_GUIDE.md       # 会議要約機能の詳細ガイド
+├── MEETING_SUMMARY_GUIDE.md       # 会議要約機能の詳細ガイド
+├── ASR_SETUP.md                   # ASRセットアップガイド
+└── FREE_ASR_GUIDE.md              # 無料ASR実装ガイド
 ```
 
 ## 🛠️ 開発
@@ -180,9 +210,28 @@ echo $AZURE_OPENAI_ENDPOINT
 echo $AZURE_OPENAI_API_KEY
 ```
 
+### ASR（音声認識）のエラー
+
+**エラー**: `FileNotFoundError: Whisper.cpp not found`
+```bash
+# 解決方法: パスを正しく設定
+export WHISPER_EXECUTABLE_PATH=/path/to/whisper.exe
+```
+
+**エラー**: `401 Unauthorized (OpenAI Whisper API)`
+```bash
+# 解決方法: APIキーを確認
+echo $env:OPENAI_API_KEY  # Windows
+echo $OPENAI_API_KEY      # Linux/Mac
+```
+
+詳細は **[ASRセットアップガイド](./ASR_SETUP.md)** を参照してください。
+
 ## 📖 関連ドキュメント
 
 - [会議要約機能ガイド](./MEETING_SUMMARY_GUIDE.md) - 会議要約CLIの詳細
+- [ASRセットアップガイド](./ASR_SETUP.md) - 音声認識のセットアップ方法
+- [無料ASR実装ガイド](./FREE_ASR_GUIDE.md) - 完全無料で音声認識を実装する方法
 - [セットアップガイド](../SETUP_GUIDE.md) - プロジェクト全体のセットアップ
 - [フロントエンド規約](../docs/frontend-rules.md)
 - [バックエンド規約](../docs/backend-rules.md)
