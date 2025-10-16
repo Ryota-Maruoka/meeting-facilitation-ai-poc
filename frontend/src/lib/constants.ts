@@ -23,8 +23,15 @@ export const DEBOUNCE_DELAY_MS = 300;
 // 会議ステータス
 export const MEETING_STATUS = {
   DRAFT: "draft",
-  ACTIVE: "active", 
+  ACTIVE: "active",
   COMPLETED: "completed",
+} as const;
+
+// ステータス表示名
+export const STATUS_LABELS = {
+  draft: "下書き",
+  active: "会議中",
+  completed: "完了",
 } as const;
 
 // アジェンダステータス
@@ -77,3 +84,49 @@ export const SUCCESS_MESSAGES = {
   ACTION_ADDED: "アクションが追加されました",
   SUMMARY_GENERATED: "サマリが生成されました",
 } as const;
+
+// Material Icons（アイコン名）
+export const ICONS = {
+  IMPORT: "file_download",
+  EXPORT: "file_upload",
+  PLUS: "add",
+  SEARCH: "search",
+  FILTER: "filter_list",
+  VIEW: "visibility",
+  EDIT: "edit",
+  COPY: "content_copy",
+  TRASH: "delete",
+  CHEVRON_LEFT: "chevron_left",
+  CHEVRON_RIGHT: "chevron_right",
+  DOWNLOAD: "download",
+  CALENDAR: "calendar_today",
+  CLOCK: "schedule",
+  ALERT: "warning",
+  CHECK: "check_circle",
+  CLOSE: "close",
+  SAVE: "save",
+  CANCEL: "cancel",
+  PERSON: "person",
+  GROUP: "group",
+  ASSIGNMENT: "assignment",
+  TRANSCRIBE: "record_voice_over",
+  PARKING: "playlist_add",
+} as const;
+
+// ダウンロード形式
+export const DOWNLOAD_FORMATS = {
+  EXCEL: "excel",
+  AUDIO: "audio",
+} as const;
+
+// ダウンロード形式のラベル
+export const DOWNLOAD_FORMAT_LABELS = {
+  excel: "Excelファイル",
+  audio: "音声ファイル",
+} as const;
+
+// Parking Lotの表示名（ユーザーフレンドリーな名称）
+export const PARKING_LOT_LABEL = "保留事項" as const;
+
+// 会議レポートの表示名
+export const SUMMARY_PAGE_TITLE = "会議レポート" as const;
