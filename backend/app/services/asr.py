@@ -195,6 +195,18 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         import logging
         logger = logging.getLogger(__name__)
         
+        # 設定を確認
+        from ..settings import settings
+        
+        # スタブ実装の場合はスタブデータを返す
+        if settings.asr_provider == "stub":
+            logger.info("スタブ実装を使用して文字起こしを実行")
+            return {
+                "text": "こんにちは、会議の文字起こしテストです。音声認識が正常に動作しています。",
+                "confidence": 0.95,
+                "language": "ja"
+            }
+        
         # ファイルサイズをチェック
         file_size = os.path.getsize(audio_file_path)
         logger.info(f"文字起こし開始: {audio_file_path} ({file_size} bytes)")
