@@ -31,79 +31,140 @@
  * - shared/lib/types.ts - 型定義
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
+import Toast from "@/shared/components/Toast";
+import { useToast } from "@/shared/hooks/useToast";
 
 export default function MeetingActivePage() {
   const params = useParams();
   const router = useRouter();
   const meetingId = params.id as string;
 
+  // 会議データを取得（本来はAPIから取得、現在はsessionStorageから取得）
+  const [meetingData, setMeetingData] = useState<{
+    title: string;
+    meetingDate?: string;
+    participants: string[];
+    agendaItems: Array<{
+      title: string;
+      duration: number;
+      expectedOutcome: string;
+    }>;
+  } | null>(null);
+
+  // 会議開始時刻と経過時間
+  const [startTime] = useState<Date>(new Date());
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
   // -----------------------------
   // ステート
   // -----------------------------
+  // バックエンド未実装のため、テストデータは削除
   const [transcripts] = useState<Array<{
     id: string;
     speaker: string;
     text: string;
     timestamp: string;
-  }>>([
-    {
-      id: "1",
-      speaker: "田中",
-      text: "今日の議題について話しましょう。まず、前回の振り返りから始めます。",
-      timestamp: "10:00:15",
-    },
-    {
-      id: "2",
-      speaker: "佐藤",
-      text: "前回のアクションアイテムについて報告します。API設計は完了しました。",
-      timestamp: "10:01:32",
-    },
-    {
-      id: "3",
-      speaker: "鈴木",
-      text: "認証方式について議論したいのですが、JWTとMTLSのどちらが良いでしょうか。",
-      timestamp: "10:03:45",
-    },
-  ]);
+  }>>([]);
 
-  const [summary] = useState<string>(
-    "認証方式の比較検討を中心に議論が行われています。JWTとMTLSの比較観点として、性能、運用負荷、障害時の復旧性が挙げられています。"
-  );
+  const [summary] = useState<string>("");
 
   const [alerts, setAlerts] = useState<Array<{
     id: string;
     type: "deviation";
     message: string;
     timestamp: string;
-  }>>([
-    {
-      id: "alert1",
-      type: "deviation",
-      message: "議題「前回の振り返り」から逸脱している可能性があります",
-      timestamp: "10:03:50",
-    },
-  ]);
+  }>>([]);
 
   const [parkingLot, setParkingLot] = useState<string[]>([]);
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
 
-  // アジェンダ進捗データ
-  const agendaItems = [
-    { title: "認証方式の確認", duration: 10, completed: 5 },
-    { title: "API方針の確認", duration: 10, completed: 0 },
-    { title: "次アクション決定", duration: 5, completed: 0 },
-  ];
+  // トースト通知
+  const { toasts, showSuccess, removeToast } = useToast();
+
+  // 初期化：sessionStorageから会議データを取得
+  useEffect(() => {
+    const storedData = sessionStorage.getItem("currentMeeting");
+    if (storedData) {
+      const data = JSON.parse(storedData);
+      setMeetingData(data);
+    } else {
+      // データがない場合はデフォルトデータを設定
+      setMeetingData({
+        title: "会議",
+        participants: [],
+        agendaItems: [],
+      });
+    }
+  }, []);
+
+  // 経過時間の更新（1秒ごと）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      setElapsedSeconds(elapsed);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [startTime]);
+
+  // 経過時間をフォーマット
+  const formatElapsedTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}時間${minutes}分${secs}秒`;
+    } else if (minutes > 0) {
+      return `${minutes}分${secs}秒`;
+    } else {
+      return `${secs}秒`;
+    }
+  };
+
+  // 開始時刻をフォーマット
+  const formatStartTime = (date: Date): string => {
+    const hours = date.getHours().toString().padStart(2, "0");
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
+
+  // 各アジェンダの経過時間を計算
+  const calculateAgendaProgress = () => {
+    if (!meetingData?.agendaItems || meetingData.agendaItems.length === 0) {
+      return [];
+    }
+
+    const elapsedMinutes = elapsedSeconds / 60;
+    let remainingMinutes = elapsedMinutes;
+
+    return meetingData.agendaItems.map((item) => {
+      const completed = Math.min(remainingMinutes, item.duration);
+      remainingMinutes = Math.max(0, remainingMinutes - item.duration);
+
+      return {
+        title: item.title,
+        duration: item.duration,
+        completed: completed, // 小数を保持してスムーズなアニメーションに
+        completedMinutes: Math.floor(completed), // 表示用は整数
+      };
+    });
+  };
+
+  const agendaProgress = calculateAgendaProgress();
 
   // -----------------------------
   // イベントハンドラ
   // -----------------------------
   const handleIgnoreAlert = (alertId: string) => {
     setAlerts(alerts.filter((alert) => alert.id !== alertId));
+    showSuccess("アラートを無視しました");
   };
 
   const handleMoveToParkingLot = (alertId: string) => {
@@ -111,6 +172,7 @@ export default function MeetingActivePage() {
     if (alert) {
       setParkingLot([...parkingLot, alert.message]);
       setAlerts(alerts.filter((a) => a.id !== alertId));
+      showSuccess("保留事項に追加しました");
     }
   };
 
@@ -118,7 +180,52 @@ export default function MeetingActivePage() {
     setEndModalOpen(true);
   };
 
-  const handleEndMeetingConfirm = () => {
+  const handleEndMeetingConfirm = async () => {
+    // 会議終了時に会議レポート用のデータを保存
+    if (meetingData) {
+      // 経過時間を計算（分単位）
+      const durationMinutes = Math.floor(elapsedSeconds / 60);
+
+      const meetingSummaryData = {
+        title: meetingData.title,
+        date: meetingData.meetingDate || new Date().toISOString().split('T')[0],
+        participants: meetingData.participants.join("、"),
+        duration: `${durationMinutes}分`,
+        startTime: formatStartTime(startTime),
+      };
+
+      sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
+
+      // JSONファイルを更新（ステータスを「完了」に、開始時刻と所要時間を記録）
+      try {
+        // 既存の会議データを取得
+        const response = await fetch(`/api/meetings/${meetingId}`);
+        if (response.ok) {
+          const existingMeeting = await response.json();
+
+          // データを更新
+          const updatedMeeting = {
+            ...existingMeeting,
+            status: "完了" as const,
+            startTime: formatStartTime(startTime),
+            duration: `${durationMinutes}分`,
+            updatedAt: new Date().toISOString(),
+          };
+
+          // 個別のJSONファイルを更新
+          await fetch(`/api/meetings/${meetingId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedMeeting),
+          });
+
+          console.log("Meeting status updated to 完了");
+        }
+      } catch (error) {
+        console.error("Failed to update meeting status:", error);
+      }
+    }
+
     console.log("会議終了:", meetingId);
     setEndModalOpen(false);
     router.push(`/meetings/${meetingId}/summary`);
@@ -161,19 +268,19 @@ export default function MeetingActivePage() {
           <div className="meeting-info">
             <div className="meeting-info-item">
               <strong>会議名:</strong>
-              <span>要件すり合わせ会議</span>
+              <span>{meetingData?.title || "読み込み中..."}</span>
             </div>
             <div className="meeting-info-item">
               <strong>開始時刻:</strong>
-              <span>10:00</span>
+              <span>{formatStartTime(startTime)}</span>
             </div>
             <div className="meeting-info-item">
               <strong>経過時間:</strong>
-              <span>15分30秒</span>
+              <span>{formatElapsedTime(elapsedSeconds)}</span>
             </div>
             <div className="meeting-info-item">
               <strong>参加者:</strong>
-              <span>田中、佐藤、鈴木、山田</span>
+              <span>{meetingData?.participants.join("、") || "なし"}</span>
             </div>
           </div>
         </div>
@@ -185,20 +292,27 @@ export default function MeetingActivePage() {
             <span>アジェンダ進捗バー</span>
           </div>
           <div className="agenda-progress-list">
-            {agendaItems.map((item, index) => (
-              <div key={index} className="agenda-progress-item">
-                <div className="agenda-progress-label">{item.title}</div>
-                <div className="agenda-progress-bar">
-                  <div
-                    className="agenda-progress-fill"
-                    style={{ width: `${(item.completed / item.duration) * 100}%` }}
-                  ></div>
+            {agendaProgress.length === 0 ? (
+              <div className="empty-state">アジェンダが設定されていません</div>
+            ) : (
+              agendaProgress.map((item, index) => (
+                <div key={index} className="agenda-progress-item">
+                  <div className="agenda-progress-label">{item.title}</div>
+                  <div className="agenda-progress-bar">
+                    <div
+                      className="agenda-progress-fill"
+                      style={{
+                        width: `${(item.completed / item.duration) * 100}%`,
+                        transition: 'width 1s linear'
+                      }}
+                    ></div>
+                  </div>
+                  <div className="agenda-progress-time">
+                    {item.completedMinutes}/{item.duration}分
+                  </div>
                 </div>
-                <div className="agenda-progress-time">
-                  {item.completed}/{item.duration}m
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -346,6 +460,16 @@ export default function MeetingActivePage() {
           </div>
         </div>
       )}
+
+      {/* トースト通知 */}
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
     </div>
   );
 }

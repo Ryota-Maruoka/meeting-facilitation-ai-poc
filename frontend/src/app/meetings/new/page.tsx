@@ -30,16 +30,18 @@
  * - shared/lib/types.ts - 型定義
  */
 
-import React, { useState, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS } from "@/lib/constants";
+import Toast from "@/shared/components/Toast";
+import { useToast } from "@/shared/hooks/useToast";
+import { generateMeetingId } from "@/lib/meetingStorage";
 
 export default function MeetingCreationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editingId = searchParams?.get("id"); // 編集モードの場合はIDが渡される
-  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // -----------------------------
   // ステート
@@ -47,7 +49,14 @@ export default function MeetingCreationPage() {
   const [title, setTitle] = useState<string>("");
   const [purpose, setPurpose] = useState<string>("");
   const [expectedOutcome, setExpectedOutcome] = useState<string>("");
-  const [meetingDate, setMeetingDate] = useState<string>(""); // YYYY-MM-DD
+  const [meetingDate, setMeetingDate] = useState<string>(() => {
+    // 当日の日付をYYYY-MM-DD形式で初期化
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }); // YYYY-MM-DD
   const [participants, setParticipants] = useState<string[]>([]);
   const [participantInput, setParticipantInput] = useState<string>("");
   const [agendaItems, setAgendaItems] = useState<Array<{
@@ -59,6 +68,76 @@ export default function MeetingCreationPage() {
   ]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [cancelModalOpen, setCancelModalOpen] = useState<boolean>(false);
+
+  // カレンダー関連のステート
+  const [showCalendar, setShowCalendar] = useState<boolean>(false);
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth());
+
+  // トースト通知
+  const { toasts, showError, showSuccess, removeToast } = useToast();
+
+  // -----------------------------
+  // 既存の下書きデータを読み込む
+  // -----------------------------
+  useEffect(() => {
+    if (editingId) {
+      fetch(`/api/meetings/${editingId}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch meeting data");
+          return res.json();
+        })
+        .then((data) => {
+          setTitle(data.title || "");
+          setPurpose(data.purpose || "");
+          setExpectedOutcome(data.expectedOutcome || "");
+          setMeetingDate(data.date || "");
+          setParticipants(Array.isArray(data.participants) ? data.participants : []);
+          setAgendaItems(
+            data.agendaItems && data.agendaItems.length > 0
+              ? data.agendaItems
+              : [{ title: "", duration: 15, expectedOutcome: "" }]
+          );
+        })
+        .catch((error) => {
+          console.error("Failed to load draft:", error);
+          showError("下書きデータの読み込みに失敗しました");
+        });
+    }
+  }, [editingId]);
+
+  // -----------------------------
+  // カレンダーユーティリティ
+  // -----------------------------
+  const generateCalendarDays = (year: number, month: number) => {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDay = firstDay.getDay(); // 0=日曜日
+    const daysInMonth = lastDay.getDate();
+
+    const days: Array<{ date: string; day: number; isEmpty: boolean }> = [];
+
+    // 空白日を追加
+    for (let i = 0; i < startDay; i++) {
+      days.push({ date: "", day: 0, isEmpty: true });
+    }
+
+    // 実際の日付を追加
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      days.push({ date: dateStr, day, isEmpty: false });
+    }
+
+    return days;
+  };
+
+  const calendarDays = useMemo(() => {
+    return generateCalendarDays(calendarYear, calendarMonth);
+  }, [calendarYear, calendarMonth]);
+
+  const isDaySelected = (date: string) => {
+    return date === meetingDate;
+  };
 
   // -----------------------------
   // バリデーション
@@ -90,6 +169,12 @@ export default function MeetingCreationPage() {
     if (participantInput.trim() && !participants.includes(participantInput.trim())) {
       setParticipants([...participants, participantInput.trim()]);
       setParticipantInput("");
+      // エラーをクリア
+      if (errors.participants) {
+        const newErrors = { ...errors };
+        delete newErrors.participants;
+        setErrors(newErrors);
+      }
     }
   };
 
@@ -115,28 +200,129 @@ export default function MeetingCreationPage() {
     setAgendaItems(newAgendaItems);
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     // 下書き保存(バリデーションなし)
-    console.log("下書き保存:", { title, purpose, expectedOutcome, meetingDate, participants, agendaItems });
-    alert("下書きとして保存しました");
-    router.push("/");
+    // 編集モードの場合は既存のID、新規の場合は新しいIDを生成
+    const meetingId = editingId || generateMeetingId();
+
+    try {
+      // 編集モードの場合は既存データを取得してマージ
+      let existingData = {};
+      if (editingId) {
+        const response = await fetch(`/api/meetings/${editingId}`);
+        if (response.ok) {
+          existingData = await response.json();
+        }
+      }
+
+      // 下書きデータを作成
+      const meetingData = {
+        ...existingData,
+        id: meetingId,
+        title: title || "無題の会議",
+        date: meetingDate,
+        participants: participants,
+        status: "下書き" as const,
+        purpose,
+        expectedOutcome,
+        agendaItems,
+        startTime: "",
+        duration: "",
+        createdAt: (existingData as any).createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 個別のJSONファイルとして保存
+      await fetch(`/api/meetings/${meetingId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(meetingData),
+      });
+
+      showSuccess(editingId ? "下書きを更新しました" : "下書きとして保存しました");
+      setTimeout(() => {
+        router.push("/");
+      }, 500);
+    } catch (error) {
+      console.error("Failed to save draft:", error);
+      showError("下書きの保存に失敗しました");
+    }
   };
 
-  const handleStartMeeting = () => {
+  const handleStartMeeting = async () => {
     // バリデーション
     if (!validate()) {
-      alert("入力内容を確認してください");
+      // エラーメッセージを収集
+      const errorMessages = Object.values(errors);
+      if (errorMessages.length > 0) {
+        showError(errorMessages[0]); // 最初のエラーメッセージを表示
+      } else {
+        showError("入力内容を確認してください");
+      }
       return;
     }
 
-    // 会議作成
-    console.log("会議作成:", { title, purpose, expectedOutcome, meetingDate, participants, agendaItems });
+    // 編集モードの場合は既存のID、新規の場合は新しいIDを生成
+    const meetingId = editingId || generateMeetingId();
 
-    // TODO: API呼び出してIDを取得
-    const mockMeetingId = "new-meeting-id";
+    // 会議データをsessionStorageに保存（会議中画面で使用）
+    const meetingData = {
+      title,
+      purpose,
+      expectedOutcome,
+      meetingDate,
+      participants,
+      agendaItems,
+    };
+    sessionStorage.setItem("currentMeeting", JSON.stringify(meetingData));
 
-    // 会議中画面へ遷移
-    router.push(`/meetings/${mockMeetingId}/active`);
+    // 下書きとしてJSONファイルに保存（会議終了時に更新）
+    try {
+      // 編集モードの場合は既存データを取得してマージ
+      let existingData = {};
+      if (editingId) {
+        const response = await fetch(`/api/meetings/${editingId}`);
+        if (response.ok) {
+          existingData = await response.json();
+        }
+      }
+
+      const newMeeting = {
+        ...existingData,
+        id: meetingId,
+        title,
+        date: meetingDate,
+        participants: participants,
+        status: "下書き" as const,
+        purpose,
+        expectedOutcome,
+        agendaItems,
+        startTime: "",
+        duration: "",
+        createdAt: (existingData as any).createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 個別のJSONファイルとして保存
+      await fetch(`/api/meetings/${meetingId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newMeeting),
+      });
+
+      // 会議IDをsessionStorageに保存
+      sessionStorage.setItem("currentMeetingId", meetingId);
+
+      showSuccess(editingId ? "会議を開始しました" : "会議を作成しました");
+
+      // 会議中画面へ遷移
+      setTimeout(() => {
+        router.push(`/meetings/${meetingId}/active`);
+      }, 500);
+    } catch (error) {
+      console.error("Failed to create meeting:", error);
+      showError("会議の作成に失敗しました");
+    }
   };
 
   const handleCancelClick = () => {
@@ -153,10 +339,28 @@ export default function MeetingCreationPage() {
   };
 
   const handleDateFieldClick = () => {
-    // 枠内クリックでカレンダーを開く
-    if (dateInputRef.current) {
-      dateInputRef.current.showPicker();
+    setShowCalendar(!showCalendar);
+  };
+
+  const handleDateSelection = (date: string) => {
+    setMeetingDate(date);
+    setShowCalendar(false);
+    // エラーをクリア
+    if (errors.meetingDate) {
+      const newErrors = { ...errors };
+      delete newErrors.meetingDate;
+      setErrors(newErrors);
     }
+  };
+
+  const handleCalendarClose = () => {
+    setShowCalendar(false);
+  };
+
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
   };
 
   // -----------------------------
@@ -173,6 +377,11 @@ export default function MeetingCreationPage() {
         }
         .card-body {
           padding: 24px 0;
+        }
+        /* 必須マークを確実に表示 */
+        .form-label-required::after {
+          content: " *";
+          color: #F44336;
         }
       `}</style>
       <div className="page-container">
@@ -192,23 +401,136 @@ export default function MeetingCreationPage() {
               className={`input ${errors.title ? "input-error" : ""}`}
               placeholder="例: 週次定例会議"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                // エラーをクリア
+                if (errors.title) {
+                  const newErrors = { ...errors };
+                  delete newErrors.title;
+                  setErrors(newErrors);
+                }
+              }}
             />
             {errors.title && <div className="error-message">{errors.title}</div>}
           </div>
 
           {/* 会議日程 */}
-          <div className="form-section short">
+          <div className="form-section short" style={{ position: "relative" }}>
             <label className="form-label form-label-required">会議日程</label>
-            <input
-              ref={dateInputRef}
-              type="date"
+            <div
               className={`input ${errors.meetingDate ? "input-error" : ""}`}
-              value={meetingDate}
-              onChange={(e) => setMeetingDate(e.target.value)}
               onClick={handleDateFieldClick}
-            />
+              style={{ cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+            >
+              <span style={{ color: meetingDate ? "#212121" : "#9e9e9e" }}>
+                {meetingDate ? formatDisplayDate(meetingDate) : "日程を選択"}
+              </span>
+              <span className="material-icons" style={{ fontSize: "20px", color: "#757575" }}>
+                {ICONS.CALENDAR}
+              </span>
+            </div>
             {errors.meetingDate && <div className="error-message">{errors.meetingDate}</div>}
+
+            {/* カレンダーポップアップ */}
+            {showCalendar && (
+              <>
+                <div
+                  style={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 99,
+                  }}
+                  onClick={handleCalendarClose}
+                />
+                <div className="calendar-popup">
+                  <div className="calendar-popup-header">
+                    <button
+                      className="btn"
+                      style={{ padding: "4px 8px", minHeight: "auto" }}
+                      onClick={() => {
+                        const newMonth = calendarMonth - 1;
+                        if (newMonth < 0) {
+                          setCalendarYear(calendarYear - 1);
+                          setCalendarMonth(11);
+                        } else {
+                          setCalendarMonth(newMonth);
+                        }
+                      }}
+                    >
+                      <span className="material-icons" style={{ fontSize: "18px" }}>
+                        {ICONS.CHEVRON_LEFT}
+                      </span>
+                    </button>
+                    <span>
+                      {calendarYear}年{calendarMonth + 1}月
+                    </span>
+                    <button
+                      className="btn"
+                      style={{ padding: "4px 8px", minHeight: "auto" }}
+                      onClick={() => {
+                        const newMonth = calendarMonth + 1;
+                        if (newMonth > 11) {
+                          setCalendarYear(calendarYear + 1);
+                          setCalendarMonth(0);
+                        } else {
+                          setCalendarMonth(newMonth);
+                        }
+                      }}
+                    >
+                      <span className="material-icons" style={{ fontSize: "18px" }}>
+                        {ICONS.CHEVRON_RIGHT}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="calendar-instruction">
+                    日付を選択してください
+                  </div>
+
+                  <div className="calendar-grid">
+                    <div className="calendar-day-header">日</div>
+                    <div className="calendar-day-header">月</div>
+                    <div className="calendar-day-header">火</div>
+                    <div className="calendar-day-header">水</div>
+                    <div className="calendar-day-header">木</div>
+                    <div className="calendar-day-header">金</div>
+                    <div className="calendar-day-header">土</div>
+
+                    {calendarDays.map((day, idx) => {
+                      if (day.isEmpty) {
+                        return (
+                          <div
+                            key={`empty-${idx}`}
+                            className="calendar-day empty"
+                          />
+                        );
+                      }
+
+                      const isSelected = isDaySelected(day.date);
+
+                      return (
+                        <div
+                          key={day.date}
+                          className={`calendar-day ${isSelected ? "selected" : ""}`}
+                          onClick={() => handleDateSelection(day.date)}
+                        >
+                          {day.day}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {meetingDate && (
+                    <div className="calendar-selected-range">
+                      <span>選択日: {formatDisplayDate(meetingDate)}</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* 会議の目的 */}
@@ -218,7 +540,15 @@ export default function MeetingCreationPage() {
               className={`textarea ${errors.purpose ? "input-error" : ""}`}
               placeholder="例: チームの進捗確認と課題の共有"
               value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
+              onChange={(e) => {
+                setPurpose(e.target.value);
+                // エラーをクリア
+                if (errors.purpose) {
+                  const newErrors = { ...errors };
+                  delete newErrors.purpose;
+                  setErrors(newErrors);
+                }
+              }}
             />
             {errors.purpose && <div className="error-message">{errors.purpose}</div>}
           </div>
@@ -258,10 +588,11 @@ export default function MeetingCreationPage() {
                   <div key={index} className="tag tag-removable">
                     <span>{participant}</span>
                     <span
-                      className="tag-close"
+                      className="material-icons tag-close"
                       onClick={() => handleRemoveParticipant(participant)}
                       role="button"
                       aria-label="削除"
+                      style={{ fontSize: "16px", cursor: "pointer" }}
                     >
                       {ICONS.CLOSE}
                     </span>
@@ -370,6 +701,16 @@ export default function MeetingCreationPage() {
           </div>
         </div>
       )}
+
+      {/* トースト通知 */}
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
     </div>
   );
 }
