@@ -50,7 +50,6 @@ class ApiClient {
       expectedOutcome: String(backend.deliverable_template ?? ""),
       meetingDate: backend.meetingDate ? String(backend.meetingDate) : undefined,
       participants: Array.isArray(backend.participants) ? backend.participants as string[] : [],
-      recordingConsent: Boolean(backend.consent_recording),
       status: (backend.status as "draft" | "active" | "completed") ?? "draft",
       created_at: String(backend.created_at),
       updated_at: String(backend.updated_at ?? backend.created_at),
@@ -74,7 +73,6 @@ class ApiClient {
       deliverable_template: payload.expectedOutcome,
       meetingDate: payload.meetingDate,
       participants: payload.participants ?? [],
-      consent_recording: payload.recordingConsent ?? false,
       agenda: (payload.agenda ?? []).map((item: any) => ({
         title: item.title,
         duration: item.duration,
@@ -151,7 +149,6 @@ class ApiClient {
     if (data.expectedOutcome !== undefined) payload.deliverable_template = data.expectedOutcome;
     if (data.meetingDate !== undefined) payload.meetingDate = data.meetingDate;
     if (data.participants !== undefined) payload.participants = data.participants;
-    if (data.recordingConsent !== undefined) payload.consent_recording = data.recordingConsent;
     if (data.agenda !== undefined) {
       payload.agenda = data.agenda.map((item) => ({
         title: item.title,
@@ -264,12 +261,6 @@ class ApiClient {
 
   async generateProposals(meetingId: string): Promise<string[]> {
     return this.request<string[]>(`/meetings/${meetingId}/proposals/generate`, {
-      method: "POST",
-    });
-  }
-
-  async checkDeviation(meetingId: string): Promise<DeviationAlert> {
-    return this.request<DeviationAlert>(`/meetings/${meetingId}/deviation/check`, {
       method: "POST",
     });
   }

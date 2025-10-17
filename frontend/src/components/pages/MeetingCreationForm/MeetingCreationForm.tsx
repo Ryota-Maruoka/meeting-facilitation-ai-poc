@@ -59,7 +59,7 @@ const MeetingCreationForm: FC<MeetingCreationFormProps> = ({
     purpose: "",
     expectedOutcome: "",
     participants: [],
-    recordingConsent: false,
+    agenda: [],
   });
 
   const [agendaItems, setAgendaItems] = useState<AgendaItemCreate[]>([
@@ -160,7 +160,11 @@ const MeetingCreationForm: FC<MeetingCreationFormProps> = ({
       // 会議作成データにアジェンダを含める
       const meetingData = {
         ...formData,
-        agenda: validAgendaItems,
+        agenda: validAgendaItems.map(item => ({
+          ...item,
+          id: crypto.randomUUID(),
+          status: "pending" as const,
+        })),
       };
 
       // 会議作成
@@ -316,7 +320,7 @@ const MeetingCreationForm: FC<MeetingCreationFormProps> = ({
               )}
             </Box>
             
-            <FormControlLabel
+            {/* <FormControlLabel
               control={
                 <Checkbox
                   checked={formData.recordingConsent}
@@ -332,7 +336,7 @@ const MeetingCreationForm: FC<MeetingCreationFormProps> = ({
                   </Typography>
                 </Box>
               }
-            />
+            /> */}
           </Stack>
         </CardContent>
       </Card>
