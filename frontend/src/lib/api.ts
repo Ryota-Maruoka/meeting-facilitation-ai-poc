@@ -48,6 +48,7 @@ class ApiClient {
       title: String(backend.title),
       purpose: String(backend.purpose),
       expectedOutcome: String(backend.deliverable_template ?? ""),
+      meetingDate: backend.meetingDate ? String(backend.meetingDate) : undefined,
       participants: Array.isArray(backend.participants) ? backend.participants as string[] : [],
       recordingConsent: Boolean(backend.consent_recording),
       status: (backend.status as "draft" | "active" | "completed") ?? "draft",
@@ -71,6 +72,7 @@ class ApiClient {
       title: payload.title,
       purpose: payload.purpose,
       deliverable_template: payload.expectedOutcome,
+      meetingDate: payload.meetingDate,
       participants: payload.participants ?? [],
       consent_recording: payload.recordingConsent ?? false,
       agenda: (payload.agenda ?? []).map((item: any) => ({
@@ -147,6 +149,7 @@ class ApiClient {
     if (data.title !== undefined) payload.title = data.title;
     if (data.purpose !== undefined) payload.purpose = data.purpose;
     if (data.expectedOutcome !== undefined) payload.deliverable_template = data.expectedOutcome;
+    if (data.meetingDate !== undefined) payload.meetingDate = data.meetingDate;
     if (data.participants !== undefined) payload.participants = data.participants;
     if (data.recordingConsent !== undefined) payload.consent_recording = data.recordingConsent;
     if (data.agenda !== undefined) {

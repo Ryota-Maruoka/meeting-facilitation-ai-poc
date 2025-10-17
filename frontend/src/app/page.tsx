@@ -44,7 +44,7 @@ export default function MeetingHistoryPage() {
 
   type Meeting = {
     id: string;
-    date: string; // YYYY-MM-DD
+    meetingDate: string; // YYYY-MM-DD
     title: string;
     participants: string;
     status: Status;
@@ -75,7 +75,7 @@ export default function MeetingHistoryPage() {
 
             return {
               id: m.id,
-              date: m.date,
+              meetingDate: m.meetingDate || m.created_at, // meetingDateフィールドがなければcreated_atを使用
               title: m.title,
               participants: participantsStr,
               status: m.status,
@@ -218,7 +218,7 @@ export default function MeetingHistoryPage() {
   const filtered = useMemo(() => {
     const kw = keyword.trim();
     const result = initialData.filter((row) => {
-      if (!inRange(row.date)) return false;
+      if (!inRange(row.meetingDate)) return false;
       if (statusFilter !== "すべてのステータス") {
         if (row.status !== statusFilter) return false;
       }
@@ -559,7 +559,7 @@ export default function MeetingHistoryPage() {
               ) : (
                 pageRows.map((row) => (
                   <tr key={row.id}>
-                    <td>{formatDate(row.date)}</td>
+                    <td>{formatDate(row.meetingDate)}</td>
                     <td>
                       <a
                         className="title-link"
@@ -659,7 +659,7 @@ export default function MeetingHistoryPage() {
               </button>
               {Array.from({ length: Math.min(totalPages, 5) }).map((_, idx) => {
                 const pageNo = idx + 1;
-                return (
+  return (
                   <button
                     key={pageNo}
                     className={`page-link ${pageNo === currentPage ? "active" : ""}`}
@@ -681,8 +681,8 @@ export default function MeetingHistoryPage() {
             </div>
           </div>
         </div>
-        </div>
-      </div>
+            </div>
+          </div>
 
       {/* 削除確認モーダル */}
       {deleteModalOpen && (
@@ -701,9 +701,9 @@ export default function MeetingHistoryPage() {
               <button className="btn btn-danger" onClick={handleDeleteConfirm}>
                 削除
               </button>
-            </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* トースト通知 */}
