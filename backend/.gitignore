@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Whisper.cpp関連（大きなファイルのため除外）
+main.exe
+whisper.exe
+whisper.dll
+*.bin
+whisper-cpp/
+models/
+
+# 音声ファイル
+*.wav
+*.mp3
+*.webm
+*.m4a
+*.flac
+
+# 一時ファイル
+*.tmp
+*.temp
+temp/
+tmp/
+
+# ログファイル
+*.log
+logs/
+
+# データファイル
+data/meetings/
+data/summaries/
+*.json
+!requirements.txt
+!package.json
+!tsconfig.json
+!next.config.mjs
+!tailwind.config.ts
+
+# テスト出力
+test_output/
+coverage/
+.pytest_cache/
