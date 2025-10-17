@@ -37,6 +37,8 @@ import { ICONS } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
 import { generateMeetingId } from "@/lib/meetingStorage";
+import { apiClient } from "@/lib/api";
+import type { Meeting } from "@/lib/types";
 
 export default function MeetingCreationPage() {
   const router = useRouter();
@@ -63,6 +65,7 @@ export default function MeetingCreationPage() {
     title: string;
     duration: number;
     expectedOutcome: string;
+    // relatedUrl?: string; // 任意対応のため一旦コメントアウト
   }>>([
     { title: "", duration: 15, expectedOutcome: "" }
   ]);
@@ -82,27 +85,31 @@ export default function MeetingCreationPage() {
   // -----------------------------
   useEffect(() => {
     if (editingId) {
-      fetch(`/api/meetings/${editingId}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to fetch meeting data");
-          return res.json();
-        })
-        .then((data) => {
+      const loadMeetingData = async () => {
+        try {
+          const data = await apiClient.getMeeting(editingId);
           setTitle(data.title || "");
           setPurpose(data.purpose || "");
           setExpectedOutcome(data.expectedOutcome || "");
-          setMeetingDate(data.date || "");
+          setMeetingDate(data.meetingDate || "");
           setParticipants(Array.isArray(data.participants) ? data.participants : []);
           setAgendaItems(
-            data.agendaItems && data.agendaItems.length > 0
-              ? data.agendaItems
+            data.agenda && data.agenda.length > 0
+              ? data.agenda.map((item: any) => ({
+                  title: item.title || "",
+                  duration: item.duration || 10,
+                  expectedOutcome: item.expectedOutcome || "",
+                  // relatedUrl: item.relatedUrl || "", // 任意対応のため一旦コメントアウト
+                }))
               : [{ title: "", duration: 15, expectedOutcome: "" }]
           );
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error("Failed to load draft:", error);
           showError("下書きデータの読み込みに失敗しました");
-        });
+        }
+      };
+      
+      loadMeetingData();
     }
   }, [editingId]);
 
@@ -202,47 +209,35 @@ export default function MeetingCreationPage() {
 
   const handleSaveDraft = async () => {
     // 下書き保存(バリデーションなし)
-    // 編集モードの場合は既存のID、新規の場合は新しいIDを生成
-    const meetingId = editingId || generateMeetingId();
-
     try {
-      // 編集モードの場合は既存データを取得してマージ
-      let existingData = {};
-      if (editingId) {
-        const response = await fetch(`/api/meetings/${editingId}`);
-        if (response.ok) {
-          existingData = await response.json();
-        }
-      }
-
-      // 下書きデータを作成
       const meetingData = {
-        ...existingData,
-        id: meetingId,
         title: title || "無題の会議",
-        date: meetingDate,
-        participants: participants,
-        status: "下書き" as const,
         purpose,
         expectedOutcome,
-        agendaItems,
-        startTime: "",
-        duration: "",
-        createdAt: (existingData as any).createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        meetingDate,
+        participants: participants,
+        agenda: agendaItems.map(item => ({
+          id: crypto.randomUUID(),
+          title: item.title,
+          duration: item.duration,
+          expectedOutcome: item.expectedOutcome,
+          status: "pending" as const, // アジェンダ進行：未開始
+          // relatedUrl: item.relatedUrl || "" // 任意対応のため一旦コメントアウト
+        })),
+        status: "draft" as const,
       };
 
-      // 個別のJSONファイルとして保存
-      await fetch(`/api/meetings/${meetingId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(meetingData),
-      });
-
-      showSuccess(editingId ? "下書きを更新しました" : "下書きとして保存しました");
-      setTimeout(() => {
-        router.push("/");
-      }, 500);
+      if (editingId) {
+        // 編集モード：既存の会議を更新
+        await apiClient.updateMeeting(editingId, meetingData);
+        showSuccess("下書きを更新しました");
+      } else {
+        // 新規作成：新しい会議を作成
+        const meeting = await apiClient.createMeeting(meetingData);
+        showSuccess("下書きを保存しました");
+        // URLを編集モードに変更
+        router.replace(`/meetings/new?id=${meeting.id}`);
+      }
     } catch (error) {
       console.error("Failed to save draft:", error);
       showError("下書きの保存に失敗しました");
@@ -272,14 +267,16 @@ export default function MeetingCreationPage() {
         body: JSON.stringify({
           title,
           purpose,
-          deliverable_template: expectedOutcome,
+          expectedOutcome,
+          meetingDate,
           participants: participants,
-          consent_recording: true,
           agenda: agendaItems.map(item => ({
+            id: crypto.randomUUID(),
             title: item.title,
             duration: item.duration,
             expectedOutcome: item.expectedOutcome,
-            relatedUrl: ""
+            status: "pending" as const,
+            // relatedUrl: "" // 任意対応のため一旦コメントアウト
           }))
         })
       });
