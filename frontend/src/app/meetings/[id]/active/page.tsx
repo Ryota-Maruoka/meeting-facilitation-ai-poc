@@ -252,7 +252,6 @@ export default function MeetingActivePage() {
   // LiveTranscriptAreaからの文字起こしデータを受信
   const handleTranscriptsUpdate = (newTranscripts: Array<{
     id: string;
-    meetingId: string;
     timestamp: string;
     text: string;
     speaker?: string;
