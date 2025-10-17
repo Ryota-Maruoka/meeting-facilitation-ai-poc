@@ -55,8 +55,8 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   
   // 音声録音関連のref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
 
   // ブラウザの対応状況をチェック
@@ -201,13 +201,12 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
-      // データが利用可能になった時の処理
-      // 録音停止時に完全なWebMファイルが生成される
-      mediaRecorder.ondataavailable = async (event) => {
-        if (event.data.size > 0) {
+      // ✅ チャンクを蓄積して完全なWebMファイルを作成
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
           console.log("🎵 音声チャンク受信:", event.data.size, "bytes", event.data.type);
           
-          // チャンクを蓄積
+          // チャンクを蓄積（完全なWebMファイルを作成するため）
           audioChunksRef.current.push(event.data);
           
           // データの先頭バイトをログ出力（デバッグ用）
@@ -236,33 +235,40 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
           } catch (err) {
             console.error("❌ 音声送信エラー:", err);
           }
+          
+          // チャンクをクリア（次の周期の準備）
+          audioChunksRef.current = [];
         }
       };
+
+      mediaRecorder.onerror = (e) => {
+        console.error("🎧 MediaRecorder エラー:", e);
+        setError("録音中にエラーが発生しました");
+      };
+
+      // ✅ 10秒ごとに ondataavailable が自動で発火
+      mediaRecorder.start(10000);
       
-      // 録音開始（30秒ごとに停止→再開して完全なWebMファイルを生成）
-      // この方式により、毎回ヘッダー付きの完全なWebMファイルが得られる
-      mediaRecorder.start();
-      
-      setIsRecording(true);
-      
-      // 30秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
+      // ✅ 10秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
       const recordingInterval = setInterval(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-          console.log("🔄 30秒経過：録音を停止→再開");
+          console.log("🔄 10秒経過：録音を停止→再開");
           mediaRecorderRef.current.stop();
           
           // 少し待ってから再開（ondataavailableの完了を待つ）
           setTimeout(() => {
             if (mediaRecorderRef.current && streamRef.current) {
               audioChunksRef.current = []; // チャンクをクリア
-              mediaRecorderRef.current.start();
+              mediaRecorderRef.current.start(10000);
             }
           }, 100);
         }
-      }, 30000); // 30秒ごと
+      }, 10000); // 10秒ごと
       
       // インターバルIDを保存（停止時にクリアするため）
       (mediaRecorderRef.current as any).recordingIntervalId = recordingInterval;
+      
+      setIsRecording(true);
     } catch (err) {
       console.error("録音開始エラー:", err);
       if (err instanceof Error) {
@@ -403,7 +409,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
                 }}
               />
               <Typography variant="body2" color="error" sx={{ fontWeight: 600 }}>
-                録音中（5秒ごとに文字起こし）
+                録音中（10秒ごとに文字起こし）
               </Typography>
             </Box>
           </>
@@ -450,7 +456,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
             >
               <Box>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {isRecording ? "🎤 音声を認識中... 5秒ごとに文字起こしされます" : "録音を開始してください"}
+                  {isRecording ? "🎤 音声を認識中... 10秒ごとに文字起こしされます" : "録音を開始してください"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   音声が文字起こしされてここに表示されます
