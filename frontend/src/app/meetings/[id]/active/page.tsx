@@ -1,22 +1,41 @@
 "use client";
 
+/**
+ * ========================================
+ * ページ: 会議進行中
+ * ========================================
+ *
+ * URL: /meetings/[id]/active
+ *
+ * このページについて:
+ * - 進行中の会議をリアルタイムで管理・ファシリテーション
+ * - 3カラムレイアウト：文字起こし / 要約 / アラート＆保留事項
+ *
+ * 主な機能:
+ * - アジェンダ進捗バー（各議題の進行状況を可視化）
+ * - リアルタイム文字起こし表示（発言者・時刻付き）
+ * - AI要約の自動生成・表示（3分ごと更新）
+ * - 脱線検知アラート表示
+ * - アラート対応（無視 / 保留事項に退避）
+ * - 保留事項リスト表示
+ * - 会議終了 → サマリー画面へ遷移
+ * - 一覧に戻るボタン
+ *
+ * リアルタイム機能:
+ * - WebSocketで音声文字起こしを受信
+ * - 定期的にAI要約を生成
+ * - 脱線検知アラートをリアルタイム表示
+ *
+ * 関連ファイル:
+ * - features/meeting-active/components/* - 会議進行中関連コンポーネント
+ * - shared/lib/types.ts - 型定義
+ */
+
 import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 
-/**
- * 会議中画面
- *
- * 機能:
- * - アジェンダ進捗バー
- * - リアルタイム文字起こし表示
- * - 要約表示
- * - アラート表示（脱線検知）
- * - アラート対応: 無視 / 保留事項に退避
- * - 保留事項表示
- * - 会議終了 → 会議レポート画面へ遷移
- */
 export default function MeetingActivePage() {
   const params = useParams();
   const router = useRouter();
@@ -127,270 +146,7 @@ export default function MeetingActivePage() {
   // -----------------------------
   return (
     <div className="page">
-      <style>{commonStyles}</style>
-      <style>{`
-        /* 追加のローカルスタイル */
-        .meeting-info-section {
-          padding: 16px 0;
-          border-bottom: 1px solid #e6e8ee;
-          background: #fafbfc;
-        }
-        .meeting-info {
-          display: flex;
-          gap: 24px;
-          font-size: 14px;
-          flex-wrap: wrap;
-        }
-        .meeting-info-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          color: #374151;
-        }
-
-        /* アジェンダ進捗バー */
-        .agenda-progress-section {
-          padding: 20px 0;
-          background: #fff;
-          border-bottom: 1px solid #e6e8ee;
-        }
-        .agenda-progress-title {
-          font-size: 14px;
-          font-weight: 600;
-          color: #424242;
-          margin-bottom: 12px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .agenda-progress-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .agenda-progress-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .agenda-progress-label {
-          font-size: 13px;
-          color: #616161;
-          min-width: 140px;
-        }
-        .agenda-progress-bar {
-          flex: 1;
-          height: 8px;
-          background: #e0e0e0;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-        .agenda-progress-fill {
-          height: 100%;
-          background: #2196F3;
-          transition: width 0.3s ease;
-        }
-        .agenda-progress-time {
-          font-size: 12px;
-          color: #757575;
-          min-width: 60px;
-          text-align: right;
-        }
-
-        /* 3カラムレイアウト */
-        .three-column-layout {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 16px;
-          padding: 24px 0;
-        }
-
-        /* 各カラムセクション */
-        .column-section {
-          background: #fff;
-          border: 1px solid #e6e8ee;
-          border-radius: 8px;
-          padding: 16px;
-          display: flex;
-          flex-direction: column;
-          height: 500px;
-        }
-
-        /* アラート・保留事項の統合カラム */
-        .alert-parking-column {
-          padding: 0;
-        }
-        .alert-section-inner,
-        .parking-section-inner {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          min-height: 0;
-          padding: 16px;
-          border-bottom: 1px solid #e6e8ee;
-        }
-        .parking-section-inner {
-          border-bottom: none;
-        }
-        .section-header {
-          font-weight: 600;
-          font-size: 15px;
-          margin-bottom: 12px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #212121;
-          padding-bottom: 12px;
-          border-bottom: 1px solid #e0e0e0;
-        }
-        .section-content {
-          flex: 1;
-          overflow-y: auto;
-          padding-right: 8px;
-        }
-        .section-content::-webkit-scrollbar {
-          width: 6px;
-        }
-        .section-content::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 3px;
-        }
-        .section-content::-webkit-scrollbar-thumb {
-          background: #bdbdbd;
-          border-radius: 3px;
-        }
-        .section-content::-webkit-scrollbar-thumb:hover {
-          background: #9e9e9e;
-        }
-
-        /* 文字起こし */
-        .transcript-item {
-          margin-bottom: 12px;
-          padding: 10px;
-          background: #f8f9fa;
-          border-radius: 6px;
-          border-left: 3px solid #2196F3;
-        }
-        .transcript-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 4px;
-        }
-        .speaker {
-          font-weight: 600;
-          font-size: 13px;
-          color: #212121;
-        }
-        .timestamp {
-          font-size: 11px;
-          color: #757575;
-        }
-        .transcript-text {
-          font-size: 13px;
-          line-height: 1.5;
-          color: #424242;
-        }
-
-        /* 要約 */
-        .summary-text {
-          font-size: 13px;
-          line-height: 1.7;
-          color: #424242;
-        }
-
-        /* アラート */
-        .alert-item {
-          background: #fff4e5;
-          border: 1px solid #ffe69c;
-          border-radius: 6px;
-          padding: 10px;
-          margin-bottom: 10px;
-        }
-        .alert-timestamp {
-          font-size: 11px;
-          color: #9a6700;
-          margin-bottom: 4px;
-        }
-        .alert-message {
-          font-size: 12px;
-          color: #9a6700;
-          margin-bottom: 8px;
-          line-height: 1.4;
-        }
-        .alert-actions {
-          display: flex;
-          gap: 6px;
-        }
-        .alert-btn {
-          flex: 1;
-          padding: 5px 10px;
-          border-radius: 4px;
-          font-size: 11px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          border: 1px solid;
-          text-align: center;
-        }
-        .alert-btn-ignore {
-          background: #fff;
-          color: #616161;
-          border-color: #d9dbe3;
-        }
-        .alert-btn-ignore:hover {
-          background: #f5f5f5;
-        }
-        .alert-btn-parking {
-          background: #2196F3;
-          color: #fff;
-          border-color: #2196F3;
-        }
-        .alert-btn-parking:hover {
-          background: #1976D2;
-        }
-
-        /* 保留事項リスト */
-        .parking-list {
-          list-style: none;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .parking-item {
-          padding: 10px 12px;
-          background: #fff3e0;
-          border-radius: 6px;
-          font-size: 13px;
-          color: #e65100;
-          border-left: 3px solid #ff9800;
-        }
-        .empty-state {
-          text-align: center;
-          color: #9e9e9e;
-          font-size: 13px;
-          padding: 40px 20px;
-        }
-
-        /* フッターアクション */
-        .footer-actions {
-          display: flex;
-          justify-content: flex-end;
-          gap: 12px;
-          padding: 20px 0;
-          border-top: 1px solid #e6e8ee;
-          background: #fafbfc;
-        }
-
-        @media (max-width: 1024px) {
-          .three-column-layout {
-            grid-template-columns: 1fr;
-          }
-          .column-section {
-            height: 300px;
-          }
-        }
-      `}</style>
+      <style suppressHydrationWarning>{commonStyles}</style>
 
       <div className="page-container">
         {/* ヘッダー */}

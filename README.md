@@ -66,16 +66,70 @@ meeting-facilitation-ai-poc/
 │   ├── run.py                              # ローカル実行スクリプト
 │   └── .gitignore                          # Whisperモデル・音声ファイル除外
 │
-└── frontend/                               # Next.js フロントエンド
+└── frontend/                               # Next.js フロントエンド（App Router）
     └── src/
-        ├── app/                            # 画面
-        │   ├── page.tsx
-        │   └── ...
-        └── components/                     # 共通UIコンポーネント
-            ├── Recorder.tsx                # 音声録音（MediaRecorder）
-            ├── TranscriptView.tsx          # 逐次文字起こし結果表示
-            ├── SummaryPanel.tsx            # 要約・決定事項表示
-            └── ParkingList.tsx             # Parking Lot表示
+        ├── app/                            # ルーティング（Next.js App Router）
+        │   ├── page.tsx                    # トップページ: 会議履歴一覧
+        │   ├── layout.tsx                  # ルートレイアウト
+        │   ├── globals.css                 # グローバルスタイル
+        │   └── meetings/                   # 会議関連ルート
+        │       ├── new/
+        │       │   └── page.tsx            # 新規会議作成画面
+        │       └── [id]/                   # 動的ルート（会議ID）
+        │           ├── active/
+        │           │   └── page.tsx        # 会議進行中画面
+        │           └── summary/
+        │               └── page.tsx        # 会議レポート画面
+        │
+        ├── features/                       # 機能別ディレクトリ（推奨パターン）
+        │   ├── meeting-history/            # 会議履歴機能
+        │   │   ├── components/
+        │   │   │   └── MeetingHistoryList.tsx
+        │   │   └── hooks/
+        │   ├── meeting-active/             # 会議進行中機能
+        │   │   ├── components/
+        │   │   └── hooks/
+        │   ├── meeting-creation/           # 会議作成機能
+        │   │   └── components/
+        │   └── meeting-summary/            # 会議レポート機能
+        │       └── components/
+        │
+        ├── shared/                         # 共通リソース
+        │   ├── components/                 # 共通UIコンポーネント
+        │   ├── hooks/                      # カスタムフック
+        │   └── lib/                        # ユーティリティ・型定義
+        │       ├── types.ts                # TypeScript型定義
+        │       ├── utils.ts                # ヘルパー関数
+        │       ├── constants.ts            # 定数定義
+        │       └── api.ts                  # API クライアント
+        │
+        └── styles/                         # スタイルファイル
+            ├── commonStyles.ts             # 共通スタイル定義
+            └── theme.ts                    # Material-UIテーマ
+```
+
+### フロントエンド構造の特徴
+
+#### 1. App Router パターン
+- Next.js 13+のApp Routerを採用
+- `app/`ディレクトリ内の`page.tsx`が各ルートのページコンポーネント
+- ファイル名は固定（`page.tsx`, `layout.tsx`など）
+
+#### 2. 機能別ディレクトリ（Features）
+- 各機能を`features/`配下に独立したモジュールとして配置
+- 機能ごとにコンポーネント、フック、ユーティリティを集約
+- スケーラブルで保守性の高い構造
+
+#### 3. 共有リソース（Shared）
+- アプリ全体で使用する共通要素を`shared/`に配置
+- 型定義、ユーティリティ関数、共通コンポーネントなど
+- 機能横断的な再利用可能なコード
+
+#### 4. わかりやすいページコメント
+- 各`page.tsx`の冒頭に詳細なコメントを記載
+- URL、機能、関連ファイルを明記
+- 何のファイルか一目で判別可能
+
 ```
 
 ## セットアップ

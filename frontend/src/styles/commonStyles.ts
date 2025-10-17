@@ -638,4 +638,765 @@ export const commonStyles = `
   .icon-lg {
     font-size: 32px;
   }
+
+  /* ========================================
+     会議画面共通スタイル
+     ======================================== */
+
+  /* 会議情報セクション */
+  .meeting-info-section {
+    padding: 16px 0;
+    border-bottom: 1px solid #e6e8ee;
+    background: #fafbfc;
+  }
+
+  .meeting-info {
+    display: flex;
+    gap: 24px;
+    font-size: 14px;
+    flex-wrap: wrap;
+  }
+
+  .meeting-info-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #374151;
+  }
+
+  /* アジェンダ進捗バー */
+  .agenda-progress-section {
+    padding: 20px 0;
+    background: #fff;
+    border-bottom: 1px solid #e6e8ee;
+  }
+
+  .agenda-progress-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #424242;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .agenda-progress-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agenda-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .agenda-progress-label {
+    font-size: 13px;
+    color: #616161;
+    min-width: 140px;
+  }
+
+  .agenda-progress-bar {
+    flex: 1;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .agenda-progress-fill {
+    height: 100%;
+    background: #2196F3;
+    transition: width 0.3s ease;
+  }
+
+  .agenda-progress-time {
+    font-size: 12px;
+    color: #757575;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* 3カラムレイアウト */
+  .three-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    padding: 24px 0;
+  }
+
+  .column-section {
+    background: #fff;
+    border: 1px solid #e6e8ee;
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 500px;
+  }
+
+  .alert-parking-column {
+    padding: 0;
+  }
+
+  .alert-section-inner,
+  .parking-section-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 16px;
+    border-bottom: 1px solid #e6e8ee;
+  }
+
+  .parking-section-inner {
+    border-bottom: none;
+  }
+
+  .section-header {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #212121;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .section-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+
+  .section-content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .section-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+  }
+
+  .section-content::-webkit-scrollbar-thumb {
+    background: #bdbdbd;
+    border-radius: 3px;
+  }
+
+  .section-content::-webkit-scrollbar-thumb:hover {
+    background: #9e9e9e;
+  }
+
+  /* 文字起こし */
+  .transcript-item {
+    margin-bottom: 12px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border-left: 3px solid #2196F3;
+  }
+
+  .transcript-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+
+  .speaker {
+    font-weight: 600;
+    font-size: 13px;
+    color: #212121;
+  }
+
+  .timestamp {
+    font-size: 11px;
+    color: #757575;
+  }
+
+  .transcript-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #424242;
+  }
+
+  /* 要約 */
+  .summary-text {
+    font-size: 13px;
+    line-height: 1.7;
+    color: #424242;
+  }
+
+  /* アラート */
+  .alert-item {
+    background: #fff4e5;
+    border: 1px solid #ffe69c;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .alert-timestamp {
+    font-size: 11px;
+    color: #9a6700;
+    margin-bottom: 4px;
+  }
+
+  .alert-message {
+    font-size: 12px;
+    color: #9a6700;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+
+  .alert-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .alert-btn {
+    flex: 1;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid;
+    text-align: center;
+  }
+
+  .alert-btn-ignore {
+    background: #fff;
+    color: #616161;
+    border-color: #d9dbe3;
+  }
+
+  .alert-btn-ignore:hover {
+    background: #f5f5f5;
+  }
+
+  .alert-btn-parking {
+    background: #2196F3;
+    color: #fff;
+    border-color: #2196F3;
+  }
+
+  .alert-btn-parking:hover {
+    background: #1976D2;
+  }
+
+  /* 保留事項 */
+  .parking-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .parking-item {
+    padding: 10px 12px;
+    background: #fff3e0;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #e65100;
+    border-left: 3px solid #ff9800;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: #9e9e9e;
+    font-size: 13px;
+    padding: 40px 20px;
+  }
+
+  /* フッターアクション */
+  .footer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 0;
+    border-top: 1px solid #e6e8ee;
+    background: #fafbfc;
+  }
+
+  /* レスポンシブ - 会議画面 */
+  @media (max-width: 1024px) {
+    .three-column-layout {
+      grid-template-columns: 1fr;
+    }
+    .column-section {
+      height: 300px;
+    }
+  }
+
+  /* ========================================
+     サマリー画面スタイル
+     ======================================== */
+
+  .details-section {
+    padding: 24px 0;
+    border-bottom: 1px solid #e6e8ee;
+    background: #fafbfc;
+  }
+
+  .details-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #111;
+  }
+
+  .details-meta {
+    display: flex;
+    gap: 24px;
+    font-size: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .details-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #374151;
+  }
+
+  .details-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .section {
+    background: #fff;
+    border: 1px solid #e6e8ee;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-weight: 700;
+    font-size: 18px;
+    margin-bottom: 16px;
+    color: #111;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .key-points {
+    list-style: none;
+    padding: 0;
+  }
+
+  .key-point-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .key-point-item:last-child {
+    border-bottom: none;
+  }
+
+  .decision-item,
+  .unresolved-item,
+  .action-item {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .decision-item {
+    border-left: 4px solid #146c43;
+  }
+
+  .unresolved-item {
+    border-left: 4px solid #9a6700;
+  }
+
+  .action-item {
+    border-left: 4px solid #667eea;
+  }
+
+  .item-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 6px;
+    color: #111;
+  }
+
+  .item-meta {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 6px;
+  }
+
+  /* ========================================
+     新規会議作成画面スタイル
+     ======================================== */
+
+  .form-section {
+    margin-bottom: 24px;
+  }
+
+  .form-section.short {
+    max-width: 400px;
+  }
+
+  .form-section.medium {
+    max-width: 600px;
+  }
+
+  .participant-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+  }
+
+  .participant-input-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .participant-input-row .input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .participant-input-row .btn {
+    flex-shrink: 0;
+    min-width: 100px;
+    white-space: nowrap;
+  }
+
+  .agenda-item {
+    border: 1px solid #e6e8ee;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: #fafbfc;
+  }
+
+  .agenda-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .agenda-title {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .agenda-row {
+    display: grid;
+    grid-template-columns: 2fr 140px;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .action-buttons {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 24px;
+    border-top: 1px solid #e6e8ee;
+  }
+
+  .action-buttons-right {
+    display: flex;
+    gap: 12px;
+  }
+
+  @media (max-width: 768px) {
+    .agenda-row {
+      grid-template-columns: 1fr;
+    }
+    .action-buttons {
+      flex-direction: column;
+    }
+    .action-buttons .btn {
+      width: 100%;
+    }
+    .participant-input-row {
+      flex-direction: column;
+    }
+    .participant-input-row .btn {
+      width: 100%;
+    }
+  }
+
+  /* ========================================
+     議事録履歴一覧画面スタイル
+     ======================================== */
+
+  /* データグリッドスタイル */
+  .data-grid {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+  }
+  .data-grid thead {
+    background: #FAFAFA;
+    border-bottom: 2px solid #E0E0E0;
+  }
+  .data-grid th {
+    color: #616161;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    padding: 16px 12px;
+    text-align: left;
+    letter-spacing: 0.5px;
+  }
+  .data-grid tbody tr {
+    border-bottom: 1px solid #EEEEEE;
+    transition: background-color 0.2s ease;
+  }
+  .data-grid tbody tr:hover {
+    background: #F5F5F5;
+  }
+  .data-grid td {
+    padding: 16px 12px;
+    color: #424242;
+    font-size: 14px;
+  }
+
+  /* 検索セクションのスタイル */
+  .search-section {
+    padding: 24px 0;
+    border-bottom: 1px solid #E0E0E0;
+    background: #FAFAFA;
+  }
+  .search-fields {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: flex-end;
+  }
+  .search-field {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .search-field-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #424242;
+  }
+  .search-field.with-icon {
+    position: relative;
+  }
+  .search-field.with-icon input {
+    padding-right: 40px;
+  }
+  .search-field .calendar-icon {
+    position: absolute;
+    right: 12px;
+    bottom: 10px;
+    cursor: pointer;
+    color: #757575;
+    transition: color 0.2s ease;
+  }
+  .search-field .calendar-icon:hover {
+    color: #2196F3;
+  }
+  .search-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+  }
+  .title-link {
+    color: #2196F3;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: color 0.2s ease;
+  }
+  .title-link:hover {
+    color: #1976D2;
+    text-decoration: underline;
+  }
+  .ops {
+    display: flex;
+    gap: 12px;
+    color: #757575;
+  }
+  .ops .icon {
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    font-size: 20px;
+  }
+  .ops .icon:hover {
+    transform: scale(1.15);
+    color: #424242;
+  }
+  .new-meeting-row {
+    display: flex;
+    justify-content: flex-end;
+    padding: 16px 0;
+    border-bottom: 1px solid #E0E0E0;
+  }
+
+  /* カレンダーポップアップ(範囲選択版) */
+  .calendar-popup {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 8px;
+    background: #fff;
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 16px;
+    z-index: 100;
+    min-width: 320px;
+  }
+  .calendar-popup-header {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #424242;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .calendar-instruction {
+    font-size: 12px;
+    color: #757575;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+  }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .calendar-day-header {
+    text-align: center;
+    font-size: 11px;
+    color: #757575;
+    font-weight: 600;
+    padding: 8px 4px;
+  }
+  .calendar-day {
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
+  .calendar-day:hover {
+    background: #e3f2fd;
+  }
+  .calendar-day.selected {
+    background: #2196F3;
+    color: #fff;
+    font-weight: 600;
+  }
+  .calendar-day.in-range {
+    background: #e3f2fd;
+    color: #1565C0;
+  }
+  .calendar-day.empty {
+    cursor: default;
+    opacity: 0.3;
+  }
+  .calendar-day.empty:hover {
+    background: transparent;
+  }
+  .calendar-selected-range {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .calendar-selected-range span {
+    color: #424242;
+  }
+
+  /* フッタースタイル */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-top: 1px solid #E0E0E0;
+    background: #FAFAFA;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .page-info {
+    color: #757575;
+    font-size: 13px;
+  }
+  .pager {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .page-link {
+    border: 1px solid #E0E0E0;
+    padding: 6px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #fff;
+    transition: all 0.2s ease;
+    min-width: 36px;
+    text-align: center;
+    font-size: 14px;
+  }
+  .page-link:hover:not(:disabled) {
+    background: #F5F5F5;
+    border-color: #2196F3;
+  }
+  .page-link.active {
+    background: #2196F3;
+    color: #fff;
+    border-color: #2196F3;
+  }
+  .page-link:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .page-size {
+    border: 1px solid #E0E0E0;
+    border-radius: 4px;
+    padding: 6px 10px;
+    background: #fff;
+    font-size: 13px;
+  }
+
+  /* レスポンシブ - 一覧画面 */
+  @media (max-width: 768px) {
+    .search-fields {
+      flex-direction: column;
+    }
+    .footer {
+      flex-direction: column;
+    }
+  }
 `;

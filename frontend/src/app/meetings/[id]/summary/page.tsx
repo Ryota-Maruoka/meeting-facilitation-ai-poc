@@ -1,19 +1,41 @@
 "use client";
 
+/**
+ * ========================================
+ * ページ: 会議サマリー（レポート）
+ * ========================================
+ *
+ * URL: /meetings/[id]/summary
+ *
+ * このページについて:
+ * - 完了した会議の結果を確認する画面
+ * - AI生成されたサマリー、決定事項、未決事項などを表示
+ *
+ * 主な機能:
+ * - 会議の基本情報表示（タイトル、日時、参加者）
+ * - AI生成サマリー表示
+ * - 決定事項一覧表示
+ * - 未決事項一覧表示
+ * - アクション項目一覧表示（担当者、期限付き）
+ * - 保留事項（Parking Lot）一覧表示
+ * - Excelファイルダウンロード
+ * - 音声ファイルダウンロード
+ * - 一覧に戻るボタン
+ *
+ * ダウンロード機能:
+ * - Excel形式：会議サマリー全体をスプレッドシートで出力
+ * - 音声ファイル：会議の録音データをダウンロード
+ *
+ * 関連ファイル:
+ * - features/meeting-summary/components/* - 会議サマリー関連コンポーネント
+ * - shared/lib/types.ts - 型定義
+ */
+
 import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL, SUMMARY_PAGE_TITLE, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 
-/**
- * 会議レポート画面
- *
- * 機能:
- * - 会議の要約・決定事項・未決事項・アクション・保留事項の表示
- * - Excelファイルダウンロード
- * - 音声ファイルダウンロード
- * - 一覧に戻る
- */
 export default function MeetingSummaryPage() {
   const params = useParams();
   const router = useRouter();
@@ -88,7 +110,7 @@ export default function MeetingSummaryPage() {
   if (isLoading) {
     return (
       <div className="page">
-        <style>{commonStyles}</style>
+        <style suppressHydrationWarning>{commonStyles}</style>
         <div className="container">
           <div className="loading">
             <div className="spinner"></div>
@@ -103,103 +125,13 @@ export default function MeetingSummaryPage() {
     <div className="page">
       <style>{commonStyles}</style>
       <style>{`
-        /* 追加のローカルスタイル */
-        .details-section {
-          padding: 24px 0;
-          border-bottom: 1px solid #e6e8ee;
-          background: #fafbfc;
-        }
-        .details-title {
-          font-size: 18px;
-          font-weight: 600;
-          margin-bottom: 12px;
-          color: #111;
-        }
-        .details-meta {
-          display: flex;
-          gap: 24px;
-          font-size: 14px;
-          flex-wrap: wrap;
-          margin-bottom: 16px;
-        }
-        .details-meta-item {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          color: #374151;
-        }
-        .details-actions {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
         .card-body {
           padding: 24px 0;
-        }
-        .section {
-          background: #fff;
-          border: 1px solid #e6e8ee;
-          border-radius: 12px;
-          padding: 20px;
-          margin-bottom: 20px;
-        }
-        .section-title {
-          font-weight: 700;
-          font-size: 18px;
-          margin-bottom: 16px;
-          color: #111;
-          display: flex;
-          align-items: center;
-          gap: 8px;
         }
         .section-content {
           font-size: 14px;
           line-height: 1.8;
           color: #374151;
-        }
-        .key-points {
-          list-style: none;
-          padding: 0;
-        }
-        .key-point-item {
-          padding: 8px 0;
-          border-bottom: 1px solid #f3f4f6;
-        }
-        .key-point-item:last-child {
-          border-bottom: none;
-        }
-        .decision-item,
-        .unresolved-item,
-        .action-item,
-        .parking-item {
-          background: #f8f9fa;
-          border-radius: 8px;
-          padding: 14px;
-          margin-bottom: 12px;
-        }
-        .decision-item {
-          border-left: 4px solid #146c43;
-        }
-        .unresolved-item {
-          border-left: 4px solid #9a6700;
-        }
-        .action-item {
-          border-left: 4px solid #667eea;
-        }
-        .parking-item {
-          border-left: 4px solid #6b7280;
-        }
-        .item-title {
-          font-weight: 600;
-          font-size: 14px;
-          margin-bottom: 6px;
-          color: #111;
-        }
-        .item-meta {
-          font-size: 12px;
-          color: #6b7280;
-          margin-top: 6px;
         }
         .footer-actions {
           display: flex;
@@ -208,18 +140,6 @@ export default function MeetingSummaryPage() {
           border-top: 1px solid #e6e8ee;
           flex-wrap: wrap;
           gap: 12px;
-        }
-        @media (max-width: 768px) {
-          .summary-meta {
-            flex-direction: column;
-            gap: 8px;
-          }
-          .header-actions {
-            flex-direction: column;
-          }
-          .header-actions .btn {
-            width: 100%;
-          }
         }
       `}</style>
 
