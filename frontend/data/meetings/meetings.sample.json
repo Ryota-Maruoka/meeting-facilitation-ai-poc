@@ -1,0 +1,97 @@
+[
+  {
+    "id": "meeting-001",
+    "title": "要件すり合わせ",
+    "date": "2025-10-07",
+    "participants": ["田中", "佐藤", "鈴木", "山田"],
+    "status": "完了",
+    "purpose": "新機能の要件定義と優先順位の決定",
+    "expectedOutcome": "要件の合意と開発スケジュールの策定",
+    "agendaItems": [
+      {
+        "title": "要件確認",
+        "duration": 15,
+        "expectedOutcome": "要件の明確化"
+      },
+      {
+        "title": "優先順位決定",
+        "duration": 10,
+        "expectedOutcome": "開発順序の合意"
+      }
+    ],
+    "startTime": "10:00",
+    "duration": "60分",
+    "createdAt": "2025-10-07T10:00:00.000Z",
+    "updatedAt": "2025-10-07T11:00:00.000Z"
+  },
+  {
+    "id": "meeting-002",
+    "title": "API設計レビュー",
+    "date": "2025-10-05",
+    "participants": ["田中", "高橋", "伊藤"],
+    "status": "完了",
+    "purpose": "新規APIの設計レビューとセキュリティ確認",
+    "expectedOutcome": "API仕様の確定",
+    "agendaItems": [
+      {
+        "title": "API仕様確認",
+        "duration": 20,
+        "expectedOutcome": "仕様の合意"
+      }
+    ],
+    "startTime": "14:00",
+    "duration": "45分",
+    "createdAt": "2025-10-05T14:00:00.000Z",
+    "updatedAt": "2025-10-05T14:45:00.000Z"
+  },
+  {
+    "id": "meeting-003",
+    "title": "週次進捗確認",
+    "date": "2025-10-03",
+    "participants": ["田中", "佐藤", "鈴木", "山田", "伊藤"],
+    "status": "完了",
+    "purpose": "週次の進捗確認と課題の共有",
+    "expectedOutcome": "次週のアクションアイテムの決定",
+    "agendaItems": [
+      {
+        "title": "進捗報告",
+        "duration": 15,
+        "expectedOutcome": "各チームの状況把握"
+      },
+      {
+        "title": "課題共有",
+        "duration": 10,
+        "expectedOutcome": "課題の洗い出し"
+      }
+    ],
+    "startTime": "10:00",
+    "duration": "30分",
+    "createdAt": "2025-10-03T10:00:00.000Z",
+    "updatedAt": "2025-10-03T10:30:00.000Z"
+  },
+  {
+    "id": "meeting-004",
+    "title": "認証方式検討会議",
+    "date": "2025-10-01",
+    "participants": ["田中", "高橋", "佐藤"],
+    "status": "下書き",
+    "purpose": "認証方式の選定と実装方針の決定",
+    "expectedOutcome": "認証方式の決定とPoC計画",
+    "agendaItems": [
+      {
+        "title": "認証方式比較",
+        "duration": 20,
+        "expectedOutcome": "各方式のメリット・デメリット整理"
+      },
+      {
+        "title": "実装方針決定",
+        "duration": 15,
+        "expectedOutcome": "採用する方式の決定"
+      }
+    ],
+    "startTime": "",
+    "duration": "",
+    "createdAt": "2025-10-01T09:00:00.000Z",
+    "updatedAt": "2025-10-01T09:00:00.000Z"
+  }
+]

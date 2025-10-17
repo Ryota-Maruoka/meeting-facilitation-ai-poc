@@ -31,10 +31,12 @@
  * - shared/lib/types.ts - 型定義
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL, SUMMARY_PAGE_TITLE, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
+import Toast from "@/shared/components/Toast";
+import { useToast } from "@/shared/hooks/useToast";
 
 export default function MeetingSummaryPage() {
   const params = useParams();
@@ -46,12 +48,17 @@ export default function MeetingSummaryPage() {
   // -----------------------------
   const [isLoading] = useState<boolean>(false);
 
-  // ダミーデータ
-  const summaryData = {
-    title: "要件すり合わせ",
-    date: "2025-10-07",
-    participants: "田中、佐藤、鈴木、山田",
-    duration: "60分",
+  // トースト通知
+  const { toasts, showSuccess, removeToast } = useToast();
+
+  // 会議データ（sessionStorageから取得）
+  const [summaryData, setSummaryData] = useState({
+    title: "",
+    date: "",
+    participants: "",
+    duration: "",
+    startTime: "",
+    // バックエンド未実装のため、以下はダミーデータ
     overallSummary: "要件すり合わせ会議では、認証方式の比較検討を中心に議論が行われ、バックエンドAPIの採用方針が決定されました。",
     keyPoints: [
       "認証方式の比較観点（性能/運用/障害時復旧）",
@@ -85,19 +92,35 @@ export default function MeetingSummaryPage() {
       },
     ],
     parkingLot: ["ABテスト基盤の統合案"],
-  };
+  });
+
+  // 初期化：sessionStorageから会議データを取得
+  useEffect(() => {
+    const storedData = sessionStorage.getItem("meetingSummary");
+    if (storedData) {
+      const data = JSON.parse(storedData);
+      setSummaryData((prev) => ({
+        ...prev,
+        title: data.title || "",
+        date: data.date || "",
+        participants: data.participants || "",
+        duration: data.duration || "",
+        startTime: data.startTime || "",
+      }));
+    }
+  }, []);
 
   // -----------------------------
   // イベントハンドラ
   // -----------------------------
   const handleDownloadExcel = () => {
     console.log("Excelダウンロード:", meetingId);
-    alert(`${DOWNLOAD_FORMAT_LABELS.excel}をダウンロードします`);
+    showSuccess(`${DOWNLOAD_FORMAT_LABELS.excel}をダウンロードします`);
   };
 
   const handleDownloadAudio = () => {
     console.log("音声ダウンロード:", meetingId);
-    alert(`${DOWNLOAD_FORMAT_LABELS.audio}をダウンロードします`);
+    showSuccess(`${DOWNLOAD_FORMAT_LABELS.audio}をダウンロードします`);
   };
 
   const handleBackToList = () => {
@@ -159,6 +182,12 @@ export default function MeetingSummaryPage() {
               <span className="material-icons icon-sm">{ICONS.CALENDAR}</span>
               <span>{summaryData.date}</span>
             </div>
+            {summaryData.startTime && (
+              <div className="details-meta-item">
+                <span className="material-icons icon-sm">{ICONS.CLOCK}</span>
+                <span>開始時刻: {summaryData.startTime}</span>
+              </div>
+            )}
             <div className="details-meta-item">
               <span className="material-icons icon-sm">{ICONS.CLOCK}</span>
               <span>所要時間: {summaryData.duration}</span>
@@ -273,6 +302,16 @@ export default function MeetingSummaryPage() {
         </div>
         </div>
       </div>
+
+      {/* トースト通知 */}
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
     </div>
   );
 }

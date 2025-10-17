@@ -27,10 +27,12 @@
  * - shared/lib/utils.ts - ユーティリティ関数
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
+import Toast from "@/shared/components/Toast";
+import { useToast } from "@/shared/hooks/useToast";
 
 export default function MeetingHistoryPage() {
   const router = useRouter();
@@ -49,52 +51,45 @@ export default function MeetingHistoryPage() {
   };
 
   // -----------------------------
-  // ダミーデータ
+  // 会議データ
   // -----------------------------
-  const initialData: Meeting[] = [
-    {
-      id: "a1",
-      date: "2025-10-07",
-      title: "要件すり合わせ",
-      participants: "田中、佐藤、鈴木、山田",
-      status: "完了",
-    },
-    {
-      id: "a2",
-      date: "2025-10-05",
-      title: "API設計レビュー",
-      participants: "田中、高橋、伊藤",
-      status: "完了",
-    },
-    {
-      id: "a3",
-      date: "2025-10-03",
-      title: "週次進捗確認",
-      participants: "田中、佐藤、鈴木、山田、伊藤",
-      status: "完了",
-    },
-    {
-      id: "a4",
-      date: "2025-10-01",
-      title: "認証方式検討会議",
-      participants: "田中、高橋、佐藤",
-      status: "下書き",
-    },
-    {
-      id: "a5",
-      date: "2025-09-28",
-      title: "スプリント計画",
-      participants: "全員(8名)",
-      status: "完了",
-    },
-    {
-      id: "a6",
-      date: "2025-09-25",
-      title: "DB設計レビュー",
-      participants: "佐藤、伊藤、山田",
-      status: "下書き",
-    },
-  ];
+  const [initialData, setInitialData] = useState<Meeting[]>([]);
+
+  // 会議データを取得
+  useEffect(() => {
+    async function fetchMeetings() {
+      try {
+        const response = await fetch("/api/meetings");
+
+        if (response.ok) {
+          const meetings = await response.json();
+
+          // APIのデータ形式を画面表示用に変換
+          const formattedMeetings = meetings.map((m: any) => {
+            // participantsが配列かどうか確認
+            const participantsStr = Array.isArray(m.participants)
+              ? m.participants.join("、")
+              : typeof m.participants === "string"
+              ? m.participants
+              : "";
+
+            return {
+              id: m.id,
+              date: m.date,
+              title: m.title,
+              participants: participantsStr,
+              status: m.status,
+            };
+          });
+
+          setInitialData(formattedMeetings);
+        }
+      } catch (error) {
+        console.error("Failed to fetch meetings:", error);
+      }
+    }
+    fetchMeetings();
+  }, []);
 
   // -----------------------------
   // フィルタ用定数
@@ -131,6 +126,9 @@ export default function MeetingHistoryPage() {
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
   const [deletingMeeting, setDeletingMeeting] = useState<Meeting | null>(null);
+
+  // トースト通知
+  const { toasts, showSuccess, showError, removeToast } = useToast();
 
   // -----------------------------
   // ユーティリティ関数
@@ -219,7 +217,7 @@ export default function MeetingHistoryPage() {
   // -----------------------------
   const filtered = useMemo(() => {
     const kw = keyword.trim();
-    return initialData.filter((row) => {
+    const result = initialData.filter((row) => {
       if (!inRange(row.date)) return false;
       if (statusFilter !== "すべてのステータス") {
         if (row.status !== statusFilter) return false;
@@ -230,7 +228,8 @@ export default function MeetingHistoryPage() {
       }
       return true;
     });
-  }, [statusFilter, keyword, dateRange, dateRangeTo]);
+    return result;
+  }, [initialData, statusFilter, keyword, dateRange, dateRangeTo]);
 
   // -----------------------------
   // ページネーション
@@ -285,9 +284,8 @@ export default function MeetingHistoryPage() {
     }
   };
 
-  const handleDownload = (meetingId: string, format: "excel" | "audio") => {
-    console.log(`ダウンロード: ${meetingId}, 形式: ${format}`);
-    alert(`${DOWNLOAD_FORMAT_LABELS[format]}をダウンロードします`);
+  const handleDownload = (_meetingId: string, format: "excel" | "audio") => {
+    showSuccess(`${DOWNLOAD_FORMAT_LABELS[format]}をダウンロードします`);
     setDropdownOpen(null);
   };
 
@@ -296,12 +294,29 @@ export default function MeetingHistoryPage() {
     setDeleteModalOpen(true);
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
     if (deletingMeeting) {
-      console.log(`削除: ${deletingMeeting.id}`);
-      alert("削除しました");
-      setDeleteModalOpen(false);
-      setDeletingMeeting(null);
+      try {
+        // 個別のJSONファイルを削除
+        const response = await fetch(`/api/meetings/${deletingMeeting.id}`, {
+          method: "DELETE",
+        });
+
+        if (response.ok) {
+          // 画面上のデータも更新
+          setInitialData((prev) => prev.filter((m) => m.id !== deletingMeeting.id));
+
+          showSuccess("会議を削除しました");
+        } else {
+          throw new Error("Delete failed");
+        }
+      } catch (error) {
+        console.error("Failed to delete meeting:", error);
+        showError("会議の削除に失敗しました");
+      } finally {
+        setDeleteModalOpen(false);
+        setDeletingMeeting(null);
+      }
     }
   };
 
@@ -690,6 +705,16 @@ export default function MeetingHistoryPage() {
           </div>
         </div>
       )}
+
+      {/* トースト通知 */}
+      {toasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          message={toast.message}
+          type={toast.type}
+          onClose={() => removeToast(toast.id)}
+        />
+      ))}
     </div>
   );
 }

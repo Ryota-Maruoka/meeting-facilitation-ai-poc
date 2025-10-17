@@ -162,13 +162,31 @@ python run.py
 
 サーバーが起動したら http://localhost:8000/docs でSwagger UIにアクセスできます。
 
-### フロントエンド（予定）
+### フロントエンド
 
 ```bash
 cd frontend
+
+# 依存関係のインストール
 npm install
+
+# 初期データファイルの準備
+# meetings.sample.jsonをコピーしてmeetings.jsonを作成
+cp data/meetings/meetings.sample.json data/meetings/meetings.json
+# Windowsの場合:
+# copy data\meetings\meetings.sample.json data\meetings\meetings.json
+
+# 開発サーバー起動
 npm run dev
 ```
+
+フロントエンドが起動したら http://localhost:3000 にアクセスできます。
+
+#### データ永続化について
+現在、データベースを使用せず、JSONファイル（`frontend/data/meetings/meetings.json`）でデータを管理しています。
+- 会議の作成・更新・削除はすべてこのJSONファイルに保存されます
+- `meetings.sample.json`は初期データのサンプルファイルです
+- `meetings.json`は`.gitignore`に追加されているため、各環境で独立して管理されます
 
 ## 技術スタック
 
