@@ -16,10 +16,7 @@ import {
 } from "@mui/material";
 import {
   Mic as MicIcon,
-  MicOff as MicOffIcon,
-  PlayArrow as PlayIcon,
   Stop as StopIcon,
-  Clear as ClearIcon,
 } from "@mui/icons-material";
 import { apiClient } from "@/lib/api";
 import type { Transcript } from "@/lib/types";
@@ -351,17 +348,9 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   return (
     <Card sx={{ height: "500px" }}>
       <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-          <Typography
-            variant="h6"
-            sx={{ display: "flex", alignItems: "center", gap: 1 }}
-          >
-            <MicIcon color="primary" />
-            ライブ字幕
-          </Typography>
-          
-          {/* クリアボタン */}
-          {transcripts.length > 0 && (
+        {/* <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}> */}
+          {/* クリアボタン（一時的にコメントアウト） */}
+          {/* {transcripts.length > 0 && (
             <Button
               variant="outlined"
               size="small"
@@ -372,8 +361,8 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
             >
               クリア
             </Button>
-          )}
-        </Box>
+          )} */}
+        {/* </Box> */}
         <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
       {/* 録音コントロール */}
       <Box sx={{ mb: 2, display: "flex", gap: 2, justifyContent: "center", alignItems: "center" }}>

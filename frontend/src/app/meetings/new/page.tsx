@@ -262,63 +262,52 @@ export default function MeetingCreationPage() {
       return;
     }
 
-    // 編集モードの場合は既存のID、新規の場合は新しいIDを生成
-    const meetingId = editingId || generateMeetingId();
-
-    // 会議データをsessionStorageに保存（会議中画面で使用）
-    const meetingData = {
-      title,
-      purpose,
-      expectedOutcome,
-      meetingDate,
-      participants,
-      agendaItems,
-    };
-    sessionStorage.setItem("currentMeeting", JSON.stringify(meetingData));
-
-    // 下書きとしてJSONファイルに保存（会議終了時に更新）
     try {
-      // 編集モードの場合は既存データを取得してマージ
-      let existingData = {};
-      if (editingId) {
-        const response = await fetch(`/api/meetings/${editingId}`);
-        if (response.ok) {
-          existingData = await response.json();
-        }
-      }
-
-      const newMeeting = {
-        ...existingData,
-        id: meetingId,
-        title,
-        date: meetingDate,
-        participants: participants,
-        status: "下書き" as const,
-        purpose,
-        expectedOutcome,
-        agendaItems,
-        startTime: "",
-        duration: "",
-        createdAt: (existingData as any).createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      // 個別のJSONファイルとして保存
-      await fetch(`/api/meetings/${meetingId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newMeeting),
+      // バックエンドAPIで会議を作成
+      const response = await fetch('http://localhost:8000/meetings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          purpose,
+          deliverable_template: expectedOutcome,
+          participants: participants,
+          consent_recording: true,
+          agenda: agendaItems.map(item => ({
+            title: item.title,
+            duration: item.duration,
+            expectedOutcome: item.expectedOutcome,
+            relatedUrl: ""
+          }))
+        })
       });
 
-      // 会議IDをsessionStorageに保存
-      sessionStorage.setItem("currentMeetingId", meetingId);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-      showSuccess(editingId ? "会議を開始しました" : "会議を作成しました");
+      const meeting = await response.json();
+      const meetingId = meeting.id;
 
-      // 会議中画面へ遷移
+      // 会議データをsessionStorageに保存（会議中画面で使用）
+      const meetingData = {
+        title,
+        purpose,
+        expectedOutcome,
+        meetingDate,
+        participants,
+        agendaItems,
+      };
+      sessionStorage.setItem("currentMeeting", JSON.stringify(meetingData));
+
+      // 会議進行中画面に遷移
+      showSuccess("会議を開始しました");
       setTimeout(() => {
         router.push(`/meetings/${meetingId}/active`);
       }, 500);
+
     } catch (error) {
       console.error("Failed to create meeting:", error);
       showError("会議の作成に失敗しました");
