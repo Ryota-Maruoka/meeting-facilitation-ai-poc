@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: bemac-meeting-dev-fe-waf-stacks
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Parameters                                                                                    ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Parameters:
+  CustomerName:
+    Type: String
+    Default: bemac
+
+  ProjectName:
+    Type: String
+    Default: meeting
+
+  Environment:
+    Type: String
+    Default: dev
+
+  SystemName:
+    Type: String
+    Default: bemac-meeting-system
+
+  AllowedIPAddresses:
+    Type: CommaDelimitedList
+    Default: "150.249.196.118/32"
+    Description: "Comma-separated list of allowed IP addresses/ranges (e.g., 192.168.1.0/24,10.0.0.1/32)"
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Resources                                                                                     ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Resources:
+  # ----------------------------------------------------------------------------- #
+  # IP Set for allowed IP addresses
+  # ----------------------------------------------------------------------------- #
+  AllowedIPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-allowed-ip-set
+      Description: Allowed IP addresses for frontend access
+      Scope: REGIONAL
+      IPAddressVersion: IPV4
+      Addresses: !Ref AllowedIPAddresses
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # WAF Web ACL
+  # ----------------------------------------------------------------------------- #
+  FrontendWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-frontend-webacl
+      Description: Web ACL for Frontend ALB
+      Scope: REGIONAL
+      DefaultAction:
+        Block: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-frontend-webacl-metric
+      Rules:
+        # IP制限ルール（最優先）
+        - Name: AllowedIPRule
+          Priority: 0
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt AllowedIPSet.Arn
+          Action:
+            Allow: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-allowed-ip-metric
+
+        # 日本からのアクセスのみ許可（ジオマッチング使用）
+        - Name: JapanOnlyRule
+          Priority: 1
+          Statement:
+            GeoMatchStatement:
+              CountryCodes:
+                - JP
+          Action:
+            Allow: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-japan-only-metric
+
+        # AWS マネージドルール: コアルールセット（一般的な脆弱性対策）
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              ExcludedRules: []
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-aws-common-ruleset-metric
+
+        # AWS マネージドルール: SQLインジェクション対策
+        - Name: AWSManagedRulesSQLiRuleSet
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+              ExcludedRules: []
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-aws-sqli-ruleset-metric
+
+        # AWS マネージドルール: 既知の不正入力パターン
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 4
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+              ExcludedRules: []
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-aws-bad-inputs-ruleset-metric
+
+        # レートベース制限（DoS攻撃対策）
+        - Name: RateLimitRule
+          Priority: 5
+          Statement:
+            RateBasedStatement:
+              Limit: 1000
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub ${CustomerName}-${ProjectName}-${Environment}-rate-limit-metric
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # WAF Web ACL Association with ALB
+  # ----------------------------------------------------------------------------- #
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn:
+        Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeAlbArn
+      WebACLArn: !GetAtt FrontendWebACL.Arn
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Outputs                                                                                       ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Outputs:
+  WebACLId:
+    Description: Web ACL ID
+    Value: !GetAtt FrontendWebACL.Id
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeWebACLId
+
+  WebACLArn:
+    Description: Web ACL ARN
+    Value: !GetAtt FrontendWebACL.Arn
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeWebACLArn
