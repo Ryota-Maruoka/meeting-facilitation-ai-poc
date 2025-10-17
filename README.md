@@ -80,40 +80,187 @@ meeting-facilitation-ai-poc/
 
 ## セットアップ
 
-### バックエンド
+### 前提条件
+
+- **Python 3.11以上**
+- **Node.js 18以上**
+- **FFmpeg**（音声変換用）
+- **Git**
+
+### 1. プロジェクトのクローン
+
+```bash
+git clone <repository-url>
+cd meeting-facilitation-ai-poc
+```
+
+### 2. バックエンドセットアップ
 
 ```bash
 cd backend
 
-# (任意) 実行ポリシー調整（有効化時にブロックされる場合のみ）
-# Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+# 仮想環境作成
+python -m venv .venv
 
-# 仮想環境作成（推奨: 3.11）※未導入なら先に 3.11 をインストール
-py -3.11 -m venv .venv
-# 3.13 利用時は: py -3.13 -m venv .venv
-
-# 仮想環境有効化
+# 仮想環境有効化（Windows）
 .\.venv\Scripts\Activate.ps1
 
-# 依存関係インストール（フォーム/ファイル受付の必須: python-multipart）
+# 仮想環境有効化（macOS/Linux）
+source .venv/bin/activate
+
+# 依存関係インストール
 pip install -r requirements.txt
 pip install python-multipart
 
-# 環境変数ファイル
-copy .env.example .env
-
-# サーバ起動
-python run.py
+# 環境変数ファイル作成
+copy .env.example .env  # Windows
+# cp .env.example .env  # macOS/Linux
 ```
 
-サーバーが起動したら http://localhost:8000/docs でSwagger UIにアクセスできます。
+### 3. 音声文字起こし機能のセットアップ
 
-### フロントエンド（予定）
+音声文字起こし機能を使用するには、以下のファイルが必要です：
+
+#### 3.1 Whisper.cppファイルのダウンロード
+
+**自動セットアップ（推奨）:**
+```bash
+# ワンコマンドで必要なファイルを自動ダウンロード
+python setup_whisper.py
+```
+
+**手動セットアップ:**
+```bash
+# 1. Whisper.cpp実行ファイルをダウンロード
+# https://github.com/ggerganov/whisper.cpp/releases
+# 最新のWindows版（main.exe）をダウンロードしてbackend/に配置
+
+# 2. モデルファイルをダウンロード（約1.5GB）
+python -c "
+import urllib.request
+import os
+os.makedirs('whisper-cpp/models', exist_ok=True)
+urllib.request.urlretrieve('https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin', 'whisper-cpp/models/ggml-base.bin')
+"
+```
+
+#### 3.2 FFmpegのインストール
+
+**Windows（winget 推奨）:**
+```bash
+# winget でインストール（推奨）
+winget install Gyan.FFmpeg
+
+# または手動インストール
+# https://ffmpeg.org/download.html からダウンロード
+```
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+**Linux:**
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+### 4. 動作確認
+
+```bash
+# バックエンドサーバー起動
+python run.py
+
+# 別のターミナルで音声認識テスト
+python test_whisper.py
+
+# または、API接続テスト
+python test_api.py
+```
+
+### 5. フロントエンドセットアップ
 
 ```bash
 cd frontend
+
+# 依存関係インストール
 npm install
+
+# 開発サーバー起動
 npm run dev
+```
+
+### 6. アクセス確認
+
+- **バックエンドAPI**: http://localhost:8000/docs
+- **フロントエンド**: http://localhost:3000
+
+## 音声文字起こし機能の使用方法
+
+### 1. 会議作成
+1. フロントエンドで会議を作成
+
+### 2. 音声録音・文字起こし
+1. 「会議開始」ボタンをクリック
+2. 音声を話す
+3. 自動的に文字起こしが実行される
+
+### 3. 結果確認
+- リアルタイムで文字起こし結果が表示される
+- 要約・未決事項・決定事項が自動生成される
+
+## トラブルシューティング
+
+### よくある問題
+
+#### 1. `main.exe`が見つからない
+```bash
+# Whisper.cpp実行ファイルをダウンロード
+# https://github.com/ggerganov/whisper.cpp/releases
+# ファイルをbackend/ディレクトリに配置
+```
+
+#### 2. モデルファイルが見つからない
+```bash
+# 自動セットアップスクリプトを実行
+python setup_whisper.py
+
+# または手動でダウンロード
+python -c "
+import urllib.request
+import os
+os.makedirs('whisper-cpp/models', exist_ok=True)
+urllib.request.urlretrieve('https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin', 'whisper-cpp/models/ggml-base.bin')
+"
+```
+
+#### 3. FFmpegが見つからない
+```bash
+# FFmpegをインストール
+# Windows: winget install Gyan.FFmpeg
+# macOS: brew install ffmpeg
+# Linux: sudo apt install ffmpeg
+```
+
+#### 4. 仮想環境が認識されない
+```bash
+# 仮想環境を再作成
+rm -rf .venv  # macOS/Linux
+# rmdir /s .venv  # Windows
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# .\.venv\Scripts\Activate.ps1  # Windows
+```
+
+### ログ確認
+
+```bash
+# バックエンドログを確認
+python run.py
+
+# 音声認識テストを実行
+python test_whisper.py
 ```
 
 ## 技術スタック
@@ -131,9 +278,10 @@ npm run dev
 - **Tailwind CSS** - スタイリング
 - **shadcn/ui** - UIコンポーネント
 
-### AI/ML（スタブ実装）
-- **Whisper** - 音声文字起こし（予定）
-- **GPT-4o mini / Claude 3.5** - 要約・提案生成（予定）
+### AI/ML
+- **Whisper.cpp** - 音声文字起こし（ローカル実行、無料）
+- **OpenAI Whisper API** - 音声文字起こし（クラウド、有料）
+- **GPT-4o mini** - 要約・提案生成（予定）
 
 ## API エンドポイント
 
@@ -193,9 +341,11 @@ npm run dev
 
 - [x] バックエンドAPI実装（F1-F5, F9-F11, F16, F18）
 - [x] JSONデータストア
-- [x] サービススタブ（ASR/LLM/Slack/脱線検知）
-- [ ] フロントエンド実装
-- [ ] 実際のWhisper/LLM API連携
+- [x] Whisper.cpp音声文字起こし機能
+- [x] 音声形式変換（WebM → WAV）
+- [x] フロントエンド実装（基本機能）
+- [x] リアルタイム音声録音・文字起こし
+- [ ] LLM API連携（要約・提案生成）
 - [ ] デプロイ設定
 
 ## ライセンス
