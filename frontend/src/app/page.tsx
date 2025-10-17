@@ -77,8 +77,7 @@ export default function MeetingHistoryPage() {
             meetingDate: m.meetingDate || m.created_at || "", // meetingDateフィールドがなければcreated_atを使用、それもなければ空文字
             title: m.title,
             participants: participantsStr,
-            status: m.status as Status,
-          
+            status: m.status === "completed" ? "完了" : "下書き", // APIのステータスを日本語に変換
           };
         });
 
