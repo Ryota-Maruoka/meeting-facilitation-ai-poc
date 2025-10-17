@@ -38,23 +38,18 @@ import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
 import LiveTranscriptArea from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
+import { apiClient } from "@/lib/api";
+import type { Meeting } from "@/lib/types";
 
 export default function MeetingActivePage() {
   const params = useParams();
   const router = useRouter();
   const meetingId = params.id as string;
 
-  // 会議データを取得（本来はAPIから取得、現在はsessionStorageから取得）
-  const [meetingData, setMeetingData] = useState<{
-    title: string;
-    meetingDate?: string;
-    participants: string[];
-    agendaItems: Array<{
-      title: string;
-      duration: number;
-      expectedOutcome: string;
-    }>;
-  } | null>(null);
+  // 会議データをAPIから取得
+  const [meetingData, setMeetingData] = useState<Meeting | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // 会議開始時刻と経過時間
   const [startTime] = useState<Date>(new Date());
@@ -87,21 +82,26 @@ export default function MeetingActivePage() {
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
 
-  // 初期化：sessionStorageから会議データを取得
+  // 初期化：APIから会議データを取得
   useEffect(() => {
-    const storedData = sessionStorage.getItem("currentMeeting");
-    if (storedData) {
-      const data = JSON.parse(storedData);
-      setMeetingData(data);
-    } else {
-      // データがない場合はデフォルトデータを設定
-      setMeetingData({
-        title: "会議",
-        participants: [],
-        agendaItems: [],
-      });
+    const fetchMeetingData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const meeting = await apiClient.getMeeting(meetingId);
+        setMeetingData(meeting);
+      } catch (err) {
+        console.error("Failed to fetch meeting data:", err);
+        setError(err instanceof Error ? err.message : "会議データの取得に失敗しました");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (meetingId) {
+      fetchMeetingData();
     }
-  }, []);
+  }, [meetingId]);
 
   // 経過時間の更新（1秒ごと）
   useEffect(() => {
@@ -138,14 +138,14 @@ export default function MeetingActivePage() {
 
   // 各アジェンダの経過時間を計算
   const calculateAgendaProgress = () => {
-    if (!meetingData?.agendaItems || meetingData.agendaItems.length === 0) {
+    if (!meetingData?.agenda || meetingData.agenda.length === 0) {
       return [];
     }
 
     const elapsedMinutes = elapsedSeconds / 60;
     let remainingMinutes = elapsedMinutes;
 
-    return meetingData.agendaItems.map((item) => {
+    return meetingData.agenda.map((item) => {
       const completed = Math.min(remainingMinutes, item.duration);
       remainingMinutes = Math.max(0, remainingMinutes - item.duration);
 
@@ -197,33 +197,18 @@ export default function MeetingActivePage() {
 
       sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
 
-      // JSONファイルを更新（ステータスを「完了」に、開始時刻と所要時間を記録）
+      // APIで会議ステータスを更新
       try {
-        // 既存の会議データを取得
-        const response = await fetch(`/api/meetings/${meetingId}`);
-        if (response.ok) {
-          const existingMeeting = await response.json();
+        await apiClient.updateMeeting(meetingId, {
+          status: "completed",
+          started_at: startTime.toISOString(),
+          ended_at: new Date().toISOString(),
+        });
 
-          // データを更新
-          const updatedMeeting = {
-            ...existingMeeting,
-            status: "完了" as const,
-            startTime: formatStartTime(startTime),
-            duration: `${durationMinutes}分`,
-            updatedAt: new Date().toISOString(),
-          };
-
-          // 個別のJSONファイルを更新
-          await fetch(`/api/meetings/${meetingId}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedMeeting),
-          });
-
-          console.log("Meeting status updated to 完了");
-        }
+        console.log("Meeting status updated to completed");
       } catch (error) {
         console.error("Failed to update meeting status:", error);
+        showSuccess("会議は終了しましたが、ステータスの更新に失敗しました");
       }
     }
 
@@ -269,6 +254,70 @@ export default function MeetingActivePage() {
   // -----------------------------
   // レンダリング
   // -----------------------------
+  
+  // ローディング状態
+  if (isLoading) {
+    return (
+      <div className="page">
+        <style suppressHydrationWarning>{commonStyles}</style>
+        <div className="page-container">
+          <div className="meeting-header">
+            <div className="meeting-title">会議中画面</div>
+          </div>
+          <div className="body-content">
+            <div style={{ textAlign: "center", padding: "2rem" }}>
+              <div>会議データを読み込み中...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // エラー状態
+  if (error) {
+    return (
+      <div className="page">
+        <style suppressHydrationWarning>{commonStyles}</style>
+        <div className="page-container">
+          <div className="meeting-header">
+            <div className="meeting-title">会議中画面</div>
+          </div>
+          <div className="body-content">
+            <div style={{ textAlign: "center", padding: "2rem" }}>
+              <div style={{ color: "red", marginBottom: "1rem" }}>エラー: {error}</div>
+              <button className="btn" onClick={() => router.push("/")}>
+                一覧に戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 会議データがない場合
+  if (!meetingData) {
+    return (
+      <div className="page">
+        <style suppressHydrationWarning>{commonStyles}</style>
+        <div className="page-container">
+          <div className="meeting-header">
+            <div className="meeting-title">会議中画面</div>
+          </div>
+          <div className="body-content">
+            <div style={{ textAlign: "center", padding: "2rem" }}>
+              <div style={{ marginBottom: "1rem" }}>会議データが見つかりません</div>
+              <button className="btn" onClick={() => router.push("/")}>
+                一覧に戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <style suppressHydrationWarning>{commonStyles}</style>
