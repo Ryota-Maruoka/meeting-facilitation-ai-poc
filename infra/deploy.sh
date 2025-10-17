@@ -109,7 +109,11 @@ BE_WORKER_STACK="${CUSTOMER_NAME}-${PROJECT_NAME}-${ENVIRONMENT}-be-worker"
 #   --stack-name ${FE_ALB_STACK} \
 #   --template-body file://12_fe_alb.yml \
 #   --parameters \
-#     ParameterKey=DomainCertificateArn,ParameterValue=${DOMAIN_CERTIFICATE_ARN} \
+#     ParameterKey=CustomerName,UsePreviousValue=true \
+#     ParameterKey=ProjectName,UsePreviousValue=true \
+#     ParameterKey=Environment,UsePreviousValue=true \
+#     ParameterKey=SystemName,UsePreviousValue=true \
+#     ParameterKey=DomainCertificateArn,UsePreviousValue=true \
 #   --profile ai-canvas \
 #   --tags \
 #     Key=customer,Value=${CUSTOMER_NAME} \
@@ -140,6 +144,14 @@ BE_WORKER_STACK="${CUSTOMER_NAME}-${PROJECT_NAME}-${ENVIRONMENT}-be-worker"
 # aws cloudformation update-stack \
 #   --stack-name ${FE_ECS_STACK} \
 #   --template-body file://13_fe_ecs.yml \
+#   --parameters \
+#     ParameterKey=CustomerName,UsePreviousValue=true \
+#     ParameterKey=ProjectName,UsePreviousValue=true \
+#     ParameterKey=Environment,UsePreviousValue=true \
+#     ParameterKey=SystemName,UsePreviousValue=true \
+#     ParameterKey=ContainerCpu,UsePreviousValue=true \
+#     ParameterKey=ContainerMemory,UsePreviousValue=true \
+#     ParameterKey=DesiredCount,UsePreviousValue=true \
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --profile ai-canvas \
 #   --tags \
@@ -171,6 +183,13 @@ BE_WORKER_STACK="${CUSTOMER_NAME}-${PROJECT_NAME}-${ENVIRONMENT}-be-worker"
 # aws cloudformation update-stack \
 #   --stack-name ${FE_WAF_STACK} \
 #   --template-body file://14_fe_waf.yml \
+#   --parameters \
+#     ParameterKey=CustomerName,UsePreviousValue=true \
+#     ParameterKey=ProjectName,UsePreviousValue=true \
+#     ParameterKey=Environment,UsePreviousValue=true \
+#     ParameterKey=SystemName,UsePreviousValue=true \
+#     ParameterKey=AllowedIPAddresses,UsePreviousValue=true \
+#   --profile ai-canvas \
 #   --tags \
 #     Key=customer,Value=${CUSTOMER_NAME} \
 #     Key=project,Value=${PROJECT_NAME} \
