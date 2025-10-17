@@ -1,21 +1,40 @@
 "use client";
 
+/**
+ * ========================================
+ * ページ: 新規会議作成
+ * ========================================
+ *
+ * URL: /meetings/new
+ *
+ * このページについて:
+ * - 新しい会議を作成するフォーム画面
+ * - 会議の基本情報、参加者、アジェンダを設定
+ *
+ * 主な機能:
+ * - 会議の基本情報入力（タイトル、目的、期待する成果物）
+ * - 会議日程選択（カレンダーUI）
+ * - 参加者の追加・削除
+ * - アジェンダ項目の追加・削除・並び替え
+ * - 下書き保存 → 一覧画面へ遷移
+ * - 会議作成 → 会議進行中画面へ遷移
+ * - キャンセル → 一覧画面へ戻る
+ *
+ * バリデーション:
+ * - タイトルは必須
+ * - 参加者は1名以上必要
+ * - アジェンダは1件以上必要
+ *
+ * 関連ファイル:
+ * - features/meeting-creation/components/* - 会議作成関連コンポーネント
+ * - shared/lib/types.ts - 型定義
+ */
+
 import React, { useState, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS } from "@/lib/constants";
 
-/**
- * 会議作成画面
- *
- * 機能:
- * - 会議の基本情報入力(タイトル、目的、期待する成果物)
- * - 会議日程選択(カレンダー)
- * - 参加者追加
- * - アジェンダ追加
- * - 下書き保存 → 一覧画面へ遷移
- * - 会議作成 → 会議中画面へ遷移
- */
 export default function MeetingCreationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -145,112 +164,15 @@ export default function MeetingCreationPage() {
   // -----------------------------
   return (
     <div className="page">
-      <style>{commonStyles}</style>
+      <style suppressHydrationWarning>{commonStyles}</style>
       <style>{`
-        /* 追加のローカルスタイル */
+        /* ページ固有のスタイル */
         .body-content {
           padding-right: 20%;
           padding-left: 25%;
         }
         .card-body {
           padding: 24px 0;
-        }
-        .form-section {
-          margin-bottom: 24px;
-        }
-        .form-section.short {
-          max-width: 400px;
-        }
-        .form-section.medium {
-          max-width: 600px;
-        }
-        .participant-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 8px;
-        }
-        .participant-input-row {
-          display: flex;
-          gap: 12px;
-          align-items: stretch;
-        }
-        .participant-input-row .input {
-          flex: 1;
-          min-width: 0;
-        }
-        .participant-input-row .btn {
-          flex-shrink: 0;
-          min-width: 100px;
-          white-space: nowrap;
-        }
-        .agenda-item {
-          border: 1px solid #e6e8ee;
-          border-radius: 8px;
-          padding: 16px;
-          margin-bottom: 12px;
-          background: #fafbfc;
-        }
-        .agenda-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 12px;
-        }
-        .agenda-title {
-          font-weight: 600;
-          font-size: 14px;
-        }
-        .agenda-row {
-          display: grid;
-          grid-template-columns: 2fr 140px;
-          gap: 12px;
-          margin-bottom: 12px;
-        }
-        .date-input-wrapper {
-          position: relative;
-          width: 100%;
-        }
-        .date-input-field {
-          width: 100%;
-          padding-right: 40px;
-        }
-        .date-input-icon {
-          position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          pointer-events: none;
-          color: #757575;
-        }
-        .action-buttons {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          padding-top: 24px;
-          border-top: 1px solid #e6e8ee;
-        }
-        .action-buttons-right {
-          display: flex;
-          gap: 12px;
-        }
-
-        @media (max-width: 768px) {
-          .agenda-row {
-            grid-template-columns: 1fr;
-          }
-          .action-buttons {
-            flex-direction: column;
-          }
-          .action-buttons .btn {
-            width: 100%;
-          }
-          .participant-input-row {
-            flex-direction: column;
-          }
-          .participant-input-row .btn {
-            width: 100%;
-          }
         }
       `}</style>
       <div className="page-container">

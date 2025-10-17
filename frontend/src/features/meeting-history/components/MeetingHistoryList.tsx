@@ -19,19 +19,19 @@ import {
   Visibility as ViewIcon,
   Summarize as SummaryIcon,
 } from "@mui/icons-material";
-import { formatDate, formatDateTime } from "@/lib/utils";
-import type { Meeting } from "@/lib/types";
+import { formatDate, formatDateTime } from "@/shared/lib/utils";
+import type { Meeting } from "@/shared/lib/types";
 
 type MeetingHistoryListProps = {
   meetings: Meeting[];
 };
 
 /**
- * ページレベルコンポーネント: 会議履歴一覧
- * 
+ * 会議履歴一覧コンポーネント
+ *
  * 会議の一覧を表示し、クリックで詳細ページへ遷移する
- * 
- * @param props - コンポーネントのプロパティ
+ *
+ * @param props.meetings - 会議データの配列
  * @returns 会議履歴一覧の JSX 要素
  */
 const MeetingHistoryList: FC<MeetingHistoryListProps> = ({ meetings }) => {
@@ -207,7 +207,7 @@ const MeetingHistoryList: FC<MeetingHistoryListProps> = ({ meetings }) => {
                       size="small"
                       startIcon={<SummaryIcon />}
                       onClick={(e) => handleViewSummary(meeting.id, e)}
-                      sx={{ 
+                      sx={{
                         bgcolor: "success.main",
                         "&:hover": { bgcolor: "success.dark" }
                       }}

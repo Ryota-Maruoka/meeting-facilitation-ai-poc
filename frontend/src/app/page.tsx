@@ -1,22 +1,37 @@
 "use client";
 
+/**
+ * ========================================
+ * ページ: 会議履歴一覧（トップページ）
+ * ========================================
+ *
+ * URL: /
+ *
+ * このページについて:
+ * - アプリケーションのトップページ
+ * - 過去の会議の一覧を表示
+ * - 検索・フィルタリング・ページネーション機能を提供
+ *
+ * 主な機能:
+ * - 会議履歴の一覧表示（テーブル形式）
+ * - ステータス・期間・キーワードによるフィルタリング
+ * - カレンダーでの期間選択
+ * - ページネーション（10件/20件/50件表示切り替え）
+ * - ダウンロード（Excel/音声ファイル選択式）
+ * - 削除（確認モーダル表示）
+ * - 会議名クリック（完了→サマリー画面、下書き→作成画面へ遷移）
+ *
+ * 関連ファイル:
+ * - features/meeting-history/components/* - 会議履歴関連コンポーネント
+ * - shared/lib/types.ts - 型定義
+ * - shared/lib/utils.ts - ユーティリティ関数
+ */
+
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 
-/**
- * トップページ: 議事録履歴一覧
- *
- * 機能:
- * - 会議履歴の一覧表示(データグリッド形式)
- * - ステータス・期間・キーワードによるフィルタリング
- * - カレンダーでの期間選択
- * - ページネーション
- * - ダウンロード(Excel/音声ファイル選択式)
- * - 削除(モーダル確認)
- * - 会議名リンク(完了→レポート画面、下書き→作成画面)
- */
 export default function MeetingHistoryPage() {
   const router = useRouter();
 
@@ -180,9 +195,8 @@ export default function MeetingHistoryPage() {
   };
 
   // カレンダーの年月（当月を初期値に）
-  const today = new Date();
-  const [calendarYear, setCalendarYear] = useState<number>(today.getFullYear());
-  const [calendarMonth, setCalendarMonth] = useState<number>(today.getMonth()); // 0=1月
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth()); // 0=1月
 
   const calendarDays = useMemo(() => {
     return generateCalendarDays(calendarYear, calendarMonth);
@@ -337,266 +351,7 @@ export default function MeetingHistoryPage() {
   // -----------------------------
   return (
     <div className="page">
-      <style>{commonStyles}</style>
-      <style>{`
-
-        /* データグリッドスタイル */
-        .data-grid {
-          width: 100%;
-          border-collapse: collapse;
-          background: #fff;
-        }
-        .data-grid thead {
-          background: #FAFAFA;
-          border-bottom: 2px solid #E0E0E0;
-        }
-        .data-grid th {
-          color: #616161;
-          font-weight: 600;
-          text-transform: uppercase;
-          font-size: 12px;
-          padding: 16px 12px;
-          text-align: left;
-          letter-spacing: 0.5px;
-        }
-        .data-grid tbody tr {
-          border-bottom: 1px solid #EEEEEE;
-          transition: background-color 0.2s ease;
-        }
-        .data-grid tbody tr:hover {
-          background: #F5F5F5;
-        }
-        .data-grid td {
-          padding: 16px 12px;
-          color: #424242;
-          font-size: 14px;
-        }
-
-        /* 検索セクションのスタイル */
-        .search-section {
-          padding: 24px 0;
-          border-bottom: 1px solid #E0E0E0;
-          background: #FAFAFA;
-        }
-        .search-fields {
-          display: flex;
-          gap: 12px;
-          margin-bottom: 20px;
-          align-items: flex-end;
-        }
-        .search-field {
-          flex: 1;
-          position: relative;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .search-field-label {
-          font-size: 12px;
-          font-weight: 500;
-          color: #424242;
-        }
-        .search-field.with-icon {
-          position: relative;
-        }
-        .search-field.with-icon input {
-          padding-right: 40px;
-        }
-        .search-field .calendar-icon {
-          position: absolute;
-          right: 12px;
-          bottom: 10px;
-          cursor: pointer;
-          color: #757575;
-          transition: color 0.2s ease;
-        }
-        .search-field .calendar-icon:hover {
-          color: #2196F3;
-        }
-        .search-buttons {
-          display: flex;
-          gap: 16px;
-          justify-content: center;
-        }
-        .title-link {
-          color: #2196F3;
-          text-decoration: none;
-          cursor: pointer;
-          font-weight: 600;
-          transition: color 0.2s ease;
-        }
-        .title-link:hover {
-          color: #1976D2;
-          text-decoration: underline;
-        }
-        .ops {
-          display: flex;
-          gap: 12px;
-          color: #757575;
-        }
-        .ops .icon {
-          cursor: pointer;
-          user-select: none;
-          transition: all 0.2s ease;
-          font-size: 20px;
-        }
-        .ops .icon:hover {
-          transform: scale(1.15);
-          color: #424242;
-        }
-        .new-meeting-row {
-          display: flex;
-          justify-content: flex-end;
-          padding: 16px 0;
-          border-bottom: 1px solid #E0E0E0;
-        }
-
-        /* カレンダーポップアップ(範囲選択版) */
-        .calendar-popup {
-          position: absolute;
-          top: 100%;
-          left: 0;
-          margin-top: 8px;
-          background: #fff;
-          border: 1px solid #E0E0E0;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-          padding: 16px;
-          z-index: 100;
-          min-width: 320px;
-        }
-        .calendar-popup-header {
-          font-size: 14px;
-          font-weight: 600;
-          margin-bottom: 12px;
-          color: #424242;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .calendar-instruction {
-          font-size: 12px;
-          color: #757575;
-          margin-bottom: 12px;
-          padding: 8px;
-          background: #f8f9fa;
-          border-radius: 4px;
-        }
-        .calendar-grid {
-          display: grid;
-          grid-template-columns: repeat(7, 1fr);
-          gap: 4px;
-          margin-top: 8px;
-        }
-        .calendar-day-header {
-          text-align: center;
-          font-size: 11px;
-          color: #757575;
-          font-weight: 600;
-          padding: 8px 4px;
-        }
-        .calendar-day {
-          text-align: center;
-          padding: 8px 4px;
-          font-size: 13px;
-          cursor: pointer;
-          border-radius: 4px;
-          transition: all 0.2s ease;
-          border: 1px solid transparent;
-        }
-        .calendar-day:hover {
-          background: #e3f2fd;
-        }
-        .calendar-day.selected {
-          background: #2196F3;
-          color: #fff;
-          font-weight: 600;
-        }
-        .calendar-day.in-range {
-          background: #e3f2fd;
-          color: #1565C0;
-        }
-        .calendar-day.empty {
-          cursor: default;
-          opacity: 0.3;
-        }
-        .calendar-day.empty:hover {
-          background: transparent;
-        }
-        .calendar-selected-range {
-          display: flex;
-          gap: 8px;
-          margin-top: 12px;
-          padding: 12px;
-          background: #f8f9fa;
-          border-radius: 4px;
-          font-size: 13px;
-        }
-        .calendar-selected-range span {
-          color: #424242;
-        }
-
-        /* フッタースタイル */
-        .footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 16px 0;
-          border-top: 1px solid #E0E0E0;
-          background: #FAFAFA;
-          flex-wrap: wrap;
-          gap: 12px;
-        }
-        .page-info {
-          color: #757575;
-          font-size: 13px;
-        }
-        .pager {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .page-link {
-          border: 1px solid #E0E0E0;
-          padding: 6px 10px;
-          border-radius: 4px;
-          cursor: pointer;
-          background: #fff;
-          transition: all 0.2s ease;
-          min-width: 36px;
-          text-align: center;
-          font-size: 14px;
-        }
-        .page-link:hover:not(:disabled) {
-          background: #F5F5F5;
-          border-color: #2196F3;
-        }
-        .page-link.active {
-          background: #2196F3;
-          color: #fff;
-          border-color: #2196F3;
-        }
-        .page-link:disabled {
-          cursor: not-allowed;
-          opacity: 0.4;
-        }
-        .page-size {
-          border: 1px solid #E0E0E0;
-          border-radius: 4px;
-          padding: 6px 10px;
-          background: #fff;
-          font-size: 13px;
-        }
-
-        @media (max-width: 768px) {
-          .search-fields {
-            flex-direction: column;
-          }
-          .footer {
-            flex-direction: column;
-          }
-        }
-      `}</style>
+      <style suppressHydrationWarning>{commonStyles}</style>
       <div className="page-container">
         {/* ヘッダー */}
         <div className="meeting-header">
