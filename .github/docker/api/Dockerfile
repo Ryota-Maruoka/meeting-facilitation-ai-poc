@@ -26,7 +26,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # アプリケーションコードをコピー
 COPY app ./app
-COPY .env* ./ 2>/dev/null || true
 
 # 環境変数の設定
 ENV PYTHONPATH=/app
