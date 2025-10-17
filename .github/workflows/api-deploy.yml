@@ -45,27 +45,6 @@ jobs:
           submodules: true
 
       # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
-      # Python環境のセットアップ
-      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-
-      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
-      # Poetryのキャッシュ
-      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
-      # - name: Cache Poetry dependencies
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: |
-      #       ~/.cache/pypoetry
-      #       ~/.cache/pip
-      #     key: ${{ runner.os }}-poetry-${{ hashFiles('app/poetry.lock') }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-poetry-
-
-      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
       # イメージタグ
       # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
       - name: Settings for image-tag
@@ -89,5 +68,5 @@ jobs:
           service-name: ${{ env.ECS_SERVICE_NAME }}
           task-definition-name: ${{ env.ECS_TASK_DEFINITION_NAME }}
           dockerfile: .github/docker/api/Dockerfile
-          context: app/backend
+          context: backend
           skip-build: 'false'
