@@ -107,10 +107,18 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
         const seconds = elapsed % 60;
         const timestamp = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
         
+        // WhisperのJSONからタイムスタンプ情報を除去し、テキストのみを抽出
+        // 包括的なタイムスタンプ除去パターンに対応
+        const cleanText = result.text
+          .replace(/\[\s*\d{1,2}:\d{2}:\d{2}\.\d{3}\s*[-–>→]+\s*\d{1,2}:\d{2}:\d{2}\.\d{3}\s*\]/g, '') // 通常パターン [00:00:00.000 --> 00:00:02.000]
+          .replace(/\[[\d:\.\-\s>→]+\]/g, '') // 念のため追加（Whisperの変形出力にも対応）
+          .replace(/\s+/g, ' ') // 余分な空白を単一スペースに統一
+          .trim();
+        
         const newTranscript: TranscriptItem = {
           id: result.id || `transcript-${now}`,
-          timestamp,
-          text: result.text,
+          timestamp, // リアルタイムの経過時間のみ使用
+          text: cleanText, // Whisperのタイムスタンプを除去したテキスト
           confidence: result.confidence,
         };
         
