@@ -45,6 +45,10 @@ dist/
 
 # Data
 backend/data/
+# 会議データは個別ファイルで管理
+# サンプルファイル以外は全てGitから除外
+frontend/data/meetings/*.json
+!frontend/data/meetings/meetings.sample.json
 *.db
 *.sqlite
 *.sqlite3
