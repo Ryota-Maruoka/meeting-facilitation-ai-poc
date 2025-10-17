@@ -28,6 +28,18 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
         import logging
         logger = logging.getLogger(__name__)
         
+        # データサイズをチェック
+        if len(webm_data) < 100:  # 最小限のヘッダサイズ
+            raise ValueError(f"WebMデータが小さすぎます: {len(webm_data)} bytes")
+        
+        # WebMファイルのマジックナンバーをチェック（EBML header: 0x1A45DFA3）
+        # 実際には先頭数バイトに0x1Aが含まれることが多い
+        if webm_data[0:4] not in [b'\x1a\x45\xdf\xa3', b'\x00\x00\x00\x00']:
+            # 簡易的なチェック: 最初の100バイトに "webm" または "matroska" の文字列があるか
+            header = webm_data[:100].lower()
+            if b'webm' not in header and b'matroska' not in header:
+                logger.warning("WebMファイルのヘッダが不正な可能性があります")
+        
         # 一時ファイルを作成
         with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as temp_webm:
             temp_webm.write(webm_data)
@@ -39,17 +51,21 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
         
         try:
             # ffmpegでWebM → WAV変換（16kHz mono PCM）
+            # -f webm を追加して形式を明示的に指定
             cmd = [
                 'ffmpeg',
                 '-y',  # 上書き確認なし
+                '-f', 'webm',  # 入力形式を明示
                 '-i', webm_path,  # 入力ファイル
                 '-ar', '16000',   # サンプルレート16kHz
                 '-ac', '1',       # モノラル
                 '-c:a', 'pcm_s16le',  # 16-bit PCM
+                '-f', 'wav',      # 出力形式を明示
                 wav_path
             ]
             
             logger.info(f"ffmpeg変換開始: {' '.join(cmd)}")
+            logger.info(f"WebMデータサイズ: {len(webm_data)} bytes")
             
             result = subprocess.run(
                 cmd,
@@ -68,8 +84,22 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
             
         except subprocess.CalledProcessError as e:
             logger.error(f"ffmpeg変換エラー: {e}")
+            logger.error(f"returncode: {e.returncode}")
             logger.error(f"stderr: {e.stderr}")
-            raise RuntimeError(f"ffmpeg conversion failed: {e.stderr}")
+            logger.error(f"stdout: {e.stdout}")
+            
+            # エラーメッセージを解析してユーザーフレンドリーなメッセージを生成
+            stderr_lower = e.stderr.lower() if e.stderr else ""
+            if "invalid data" in stderr_lower or "ebml" in stderr_lower:
+                raise RuntimeError(
+                    "音声データが破損しているか、無効なWebM形式です。"
+                    "マイクが正常に動作しているか確認してください。"
+                )
+            elif "no audio" in stderr_lower:
+                raise RuntimeError("音声ストリームが見つかりません。マイクが有効か確認してください。")
+            else:
+                raise RuntimeError(f"音声形式の変換に失敗しました: {e.stderr[:200]}")
+                
         except subprocess.TimeoutExpired:
             logger.error("ffmpeg変換がタイムアウトしました")
             raise RuntimeError("ffmpeg conversion timeout")
@@ -344,51 +374,58 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         
         logger.info(f"モデルファイル: {model_path}")
         
-        # Whisper.cppを実行（標準出力からテキストを取得）
+        # Whisper.cppを実行（標準出力/標準エラー出力から直接取得）
         cmd = [
             whisper_exe,
             "-m", model_path,  # モデルファイル
             "-f", processed_audio_path,  # 入力ファイル（変換済み）
             "-l", settings.asr_language,  # 言語
-            "-t", str(int(settings.asr_temperature)),  # 温度（整数）
-            "-nt",  # テキストのみ出力（タイムスタンプなし）
+            "-t", "8",  # スレッド数（0を避けるため明示的に8に設定）
         ]
         
         logger.info(f"Whisper.cppコマンド: {' '.join(cmd)}")
+        logger.info("Whisper.cpp実行中... (最大5分待機)")
         
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=60,  # 60秒タイムアウト
+            encoding='utf-8',  # UTF-8エンコーディングを明示指定（Windows CP932対策）
+            errors='replace',  # デコードエラー時は置換文字を使用
+            timeout=300,  # 300秒（5分）タイムアウト（30秒音声の処理に十分な時間）
             cwd=os.path.dirname(os.path.abspath(whisper_exe))
         )
         
-        if result.returncode != 0:
-            logger.error(f"Whisper.cppエラー (returncode={result.returncode})")
-            logger.error(f"stderr: {result.stderr}")
-            logger.error(f"stdout: {result.stdout}")
-            raise RuntimeError(f"Whisper.cpp failed: {result.stderr}")
+        logger.info(f"Whisper.cpp実行完了 (returncode={result.returncode})")
+        logger.info(f"Whisper.cpp raw stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
+        logger.info(f"Whisper.cpp raw stderr: {result.stderr[:500] if result.stderr else '(empty)'}")
         
-        logger.info("Whisper.cpp実行成功")
+        # returncode が 0 でなくても、出力がある場合は処理を続行
+        # （Whisper.cppはstderrに結果を出力することがある）
         
-        # 標準出力からテキストを取得
-        text = result.stdout.strip()
+        # stderrから文字起こし結果を抽出（Whisper.cppは通常stderrに出力する）
+        text = ""
         
-        # 空の場合はstderrも確認（Whisper.cppはstderrに出力する場合がある）
-        if not text and result.stderr:
-            # stderrから [BLANK_AUDIO] などのマーカーを除外してテキストを抽出
+        if result.stderr:
+            # stderrから文字起こし結果を抽出
+            # Whisper.cppは以下の形式で出力する：
+            # [00:00:00.000 --> 00:00:05.000]  こんにちは、これはテストです。
             lines = result.stderr.split('\n')
             for line in lines:
                 # タイムスタンプ付きの文字起こし行を探す
-                # 例: [00:00:00.000 --> 00:00:05.000]  こんにちは
                 if '-->' in line and ']' in line:
                     # タイムスタンプの後のテキストを抽出
                     text_part = line.split(']', 1)[-1].strip()
                     if text_part and not text_part.startswith('['):
                         text += text_part + " "
+            
+            text = text.strip()
         
-        text = text.strip()
+        # stderrにテキストがない場合はstdoutを確認
+        if not text and result.stdout:
+            text = result.stdout.strip()
+        
+        logger.info(f"抽出されたテキスト: {text[:200] if text else '(empty)'}")
         
         # テキストが空の場合
         if not text:
@@ -405,9 +442,9 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         if processed_audio_path != audio_file_path and os.path.exists(processed_audio_path):
             try:
                 os.unlink(processed_audio_path)
-                logger.info("一時ファイルを削除しました")
+                logger.info("一時音声ファイルを削除しました")
             except Exception as e:
-                logger.warning(f"一時ファイルの削除に失敗: {e}")
+                logger.warning(f"一時音声ファイルの削除に失敗: {e}")
         
         return {
             "text": text,

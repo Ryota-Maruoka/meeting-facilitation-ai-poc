@@ -134,7 +134,10 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
               text: t.text,
               speaker: t.speaker,
             }));
-            onTranscriptsUpdate(transcriptData);
+            // レンダリング中にsetStateを呼び出さないよう、非同期で実行
+            setTimeout(() => {
+              onTranscriptsUpdate(transcriptData);
+            }, 0);
           }
           
           return updated;
@@ -173,38 +176,93 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       streamRef.current = stream;
       startTimeRef.current = Date.now();
       
+      // ブラウザがサポートするMIMEタイプを検出
+      const mimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/mp4",
+      ];
+      
+      let selectedMimeType = "audio/webm"; // デフォルト
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          console.log("✅ 使用するMIMEタイプ:", mimeType);
+          break;
+        }
+      }
+      
       // MediaRecorderを設定
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
+        mimeType: selectedMimeType,
       });
       
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
-      // データが利用可能になった時の処理（5秒ごとに実行）
+      // データが利用可能になった時の処理
+      // 録音停止時に完全なWebMファイルが生成される
       mediaRecorder.ondataavailable = async (event) => {
         if (event.data.size > 0) {
-          console.log("🎵 音声チャンク受信:", event.data.size, "bytes");
-          // リアルタイムで文字起こしを実行
-          const audioBlob = new Blob([event.data], { type: "audio/webm" });
+          console.log("🎵 音声チャンク受信:", event.data.size, "bytes", event.data.type);
           
-          // 即座に文字起こしを実行（awaitせずに並行処理）
-          sendAudioChunk(audioBlob).catch(err => {
-            console.error("❌ チャンク送信エラー:", err);
-          });
+          // チャンクを蓄積
+          audioChunksRef.current.push(event.data);
+          
+          // データの先頭バイトをログ出力（デバッグ用）
+          const reader = new FileReader();
+          reader.onload = () => {
+            const arrayBuffer = reader.result as ArrayBuffer;
+            const bytes = new Uint8Array(arrayBuffer).slice(0, 20);
+            console.log("📊 音声データの先頭バイト:", Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+          };
+          reader.readAsArrayBuffer(event.data.slice(0, 20));
         }
       };
       
-      // 録音停止時の処理
-      mediaRecorder.onstop = () => {
+      // 録音停止時の処理（完全なWebMファイルを送信）
+      mediaRecorder.onstop = async () => {
         console.log("🛑 録音停止");
-        // 最後のチャンクはondataavailableで処理されるため、ここでは何もしない
+        
+        if (audioChunksRef.current.length > 0) {
+          // すべてのチャンクを結合して完全なWebMファイルを作成
+          const audioBlob = new Blob(audioChunksRef.current, { type: selectedMimeType });
+          console.log("📦 完全な音声ファイル作成:", audioBlob.size, "bytes");
+          
+          // 文字起こしを実行
+          try {
+            await sendAudioChunk(audioBlob);
+          } catch (err) {
+            console.error("❌ 音声送信エラー:", err);
+          }
+        }
       };
       
-      // 録音開始
-      mediaRecorder.start(5000); // 5秒ごとにチャンクを生成
+      // 録音開始（30秒ごとに停止→再開して完全なWebMファイルを生成）
+      // この方式により、毎回ヘッダー付きの完全なWebMファイルが得られる
+      mediaRecorder.start();
       
       setIsRecording(true);
+      
+      // 30秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
+      const recordingInterval = setInterval(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          console.log("🔄 30秒経過：録音を停止→再開");
+          mediaRecorderRef.current.stop();
+          
+          // 少し待ってから再開（ondataavailableの完了を待つ）
+          setTimeout(() => {
+            if (mediaRecorderRef.current && streamRef.current) {
+              audioChunksRef.current = []; // チャンクをクリア
+              mediaRecorderRef.current.start();
+            }
+          }, 100);
+        }
+      }, 30000); // 30秒ごと
+      
+      // インターバルIDを保存（停止時にクリアするため）
+      (mediaRecorderRef.current as any).recordingIntervalId = recordingInterval;
     } catch (err) {
       console.error("録音開始エラー:", err);
       if (err instanceof Error) {
@@ -223,6 +281,12 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
 
   // 録音停止
   const stopRecording = useCallback(() => {
+    // インターバルをクリア
+    if (mediaRecorderRef.current && (mediaRecorderRef.current as any).recordingIntervalId) {
+      clearInterval((mediaRecorderRef.current as any).recordingIntervalId);
+      (mediaRecorderRef.current as any).recordingIntervalId = null;
+    }
+    
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop();
     }
