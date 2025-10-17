@@ -235,23 +235,23 @@ BE_WORKER_STACK="${CUSTOMER_NAME}-${PROJECT_NAME}-${ENVIRONMENT}-be-worker"
 #     Key=system,Value=${SYSTEM_NAME}
 
 
-aws cloudformation update-stack \
-  --stack-name ${BE_ALB_STACK} \
-  --template-body file://22_be_alb.yml \
-  --parameters \
-    ParameterKey=CustomerName,UsePreviousValue=true \
-    ParameterKey=ProjectName,UsePreviousValue=true \
-    ParameterKey=Environment,UsePreviousValue=true \
-    ParameterKey=SystemName,UsePreviousValue=true \
-    ParameterKey=DomainName,UsePreviousValue=true \
-    ParameterKey=Port,UsePreviousValue=true \
-    ParameterKey=ExistingPrivateHostedZoneId,UsePreviousValue=true \
-  --profile ai-canvas \
-  --tags \
-    Key=customer,Value=${CUSTOMER_NAME} \
-    Key=project,Value=${PROJECT_NAME} \
-    Key=environment,Value=${ENVIRONMENT} \
-    Key=system,Value=${SYSTEM_NAME} \
+# aws cloudformation update-stack \
+#   --stack-name ${BE_ALB_STACK} \
+#   --template-body file://22_be_alb.yml \
+#   --parameters \
+#     ParameterKey=CustomerName,UsePreviousValue=true \
+#     ParameterKey=ProjectName,UsePreviousValue=true \
+#     ParameterKey=Environment,UsePreviousValue=true \
+#     ParameterKey=SystemName,UsePreviousValue=true \
+#     ParameterKey=DomainName,UsePreviousValue=true \
+#     ParameterKey=Port,UsePreviousValue=true \
+#     ParameterKey=ExistingPrivateHostedZoneId,UsePreviousValue=true \
+#   --profile ai-canvas \
+#   --tags \
+#     Key=customer,Value=${CUSTOMER_NAME} \
+#     Key=project,Value=${PROJECT_NAME} \
+#     Key=environment,Value=${ENVIRONMENT} \
+#     Key=system,Value=${SYSTEM_NAME} \
 
 ### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
 ### ECS Backend
