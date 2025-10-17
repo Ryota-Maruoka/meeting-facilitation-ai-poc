@@ -111,7 +111,7 @@ Resources:
       VpcId:
         Fn::ImportValue: aicompass-demo-VpcId
       HealthCheckEnabled: true
-      HealthCheckPath: /
+      HealthCheckPath: /health
       HealthCheckPort: !Ref Port
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 60
