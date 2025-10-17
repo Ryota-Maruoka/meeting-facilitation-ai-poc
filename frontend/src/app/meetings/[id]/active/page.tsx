@@ -37,6 +37,7 @@ import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
+import LiveTranscriptArea from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
 
 export default function MeetingActivePage() {
   const params = useParams();
@@ -62,8 +63,8 @@ export default function MeetingActivePage() {
   // -----------------------------
   // ステート
   // -----------------------------
-  // バックエンド未実装のため、テストデータは削除
-  const [transcripts] = useState<Array<{
+  // 文字起こしデータ（LiveTranscriptAreaから受信）
+  const [transcripts, setTranscripts] = useState<Array<{
     id: string;
     speaker: string;
     text: string;
@@ -248,6 +249,24 @@ export default function MeetingActivePage() {
     setBackModalOpen(false);
   };
 
+  // LiveTranscriptAreaからの文字起こしデータを受信
+  const handleTranscriptsUpdate = (newTranscripts: Array<{
+    id: string;
+    meetingId: string;
+    timestamp: string;
+    text: string;
+    speaker?: string;
+  }>) => {
+    // LiveTranscriptAreaの形式を会議中画面の形式に変換
+    const convertedTranscripts = newTranscripts.map(t => ({
+      id: t.id,
+      speaker: t.speaker || "話者不明",
+      text: t.text,
+      timestamp: t.timestamp,
+    }));
+    setTranscripts(convertedTranscripts);
+  };
+
   // -----------------------------
   // レンダリング
   // -----------------------------
@@ -318,22 +337,17 @@ export default function MeetingActivePage() {
 
         {/* 3カラムレイアウト */}
         <div className="three-column-layout">
-          {/* 文字起こし */}
+          {/* 文字起こし（LiveTranscriptArea統合） */}
           <div className="column-section">
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.TRANSCRIBE}</span>
-              <span>文字起こし</span>
+              <span>ライブ字幕</span>
             </div>
             <div className="section-content">
-              {transcripts.map((item) => (
-                <div key={item.id} className="transcript-item">
-                  <div className="transcript-header">
-                    <span className="speaker">{item.speaker}</span>
-                    <span className="timestamp">{item.timestamp}</span>
-                  </div>
-                  <div className="transcript-text">{item.text}</div>
-                </div>
-              ))}
+              <LiveTranscriptArea
+                meetingId={meetingId}
+                onTranscriptsUpdate={handleTranscriptsUpdate}
+              />
             </div>
           </div>
 
