@@ -7,3 +7,13 @@ openai>=1.0.0
 python-dateutil>=2.8.0
 tiktoken>=0.5.0
 typer>=0.9.0
+
+# ファイルアップロード用
+python-multipart>=0.0.6
+
+# Python版Whisper（本番環境で使用）
+openai-whisper>=20231117
+
+# PyTorch（CPU版）
+# 注: 以下は別途インストールが必要
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
