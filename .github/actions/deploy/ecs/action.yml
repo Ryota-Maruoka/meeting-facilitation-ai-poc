@@ -38,6 +38,10 @@ inputs:
   context:
     description: Context path
     required: true
+  build-args:
+    description: Docker build arguments (multiline string)
+    required: false
+    default: ''
 
 
 ### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
@@ -64,7 +68,17 @@ runs:
         ECR_REPOSITORY: ${{ inputs.ecr-repository }}
         IMAGE_TAG: ${{ inputs.image-tag }}
       run: |
+        BUILD_ARGS=""
+        if [ -n "${{ inputs.build-args }}" ]; then
+          while IFS= read -r arg; do
+            if [ -n "$arg" ]; then
+              BUILD_ARGS="$BUILD_ARGS --build-arg $arg"
+            fi
+          done <<< "${{ inputs.build-args }}"
+        fi
+
         docker build -f ${{ inputs.dockerfile }} \
+         $BUILD_ARGS \
          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ${{ inputs.context }}
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT

@@ -16,8 +16,11 @@ RUN npm ci --verbose --no-audit --no-fund
 # ソースコードのコピーとビルド
 COPY . .
 
+# ビルド時の環境変数（Next.jsのビルドに必要）
+ARG NEXT_PUBLIC_API_URL
 ENV NODE_ENV=production \
-    PORT=3000
+    PORT=3000 \
+    NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 RUN npm run build
 
