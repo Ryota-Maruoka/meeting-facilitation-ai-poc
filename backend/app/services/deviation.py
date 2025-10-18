@@ -57,7 +57,7 @@ def check_realtime_deviation(
             "is_deviation": False,
             "confidence": 0.0,
             "message": "データ不足",
-            "suggested_agenda": []
+            "suggestedTopics": []
         }
     
     # 直近の文字起こし結果を結合
@@ -68,7 +68,7 @@ def check_realtime_deviation(
             "is_deviation": False,
             "confidence": 0.0,
             "message": "テキストが空",
-            "suggested_agenda": []
+            "suggestedTopics": []
         }
     
     # 各アジェンダとの類似度を計算
@@ -83,25 +83,25 @@ def check_realtime_deviation(
     
     # 脱線判定
     is_deviation = best_similarity < threshold
-    
+
     # 推奨アジェンダ（類似度上位2つ）
-    suggested_agenda = [agenda for _, agenda in similarities[:2]]
-    
+    suggested_topics = [agenda for _, agenda in similarities[:2]]
+
     # メッセージ生成
     if is_deviation:
         message = f"直近{consecutive_chunks}回の発話がアジェンダ「{best_agenda}」との類似度が低い状態です（{best_similarity:.2f}）"
     else:
         message = f"アジェンダ「{best_agenda}」に沿った発話です（類似度: {best_similarity:.2f}）"
-    
+
     logger.info(f"脱線検知結果: is_deviation={is_deviation}, similarity={best_similarity:.2f}, agenda={best_agenda}")
-    
+
     return {
         "is_deviation": is_deviation,
         "confidence": 1.0 - best_similarity,  # 脱線の確信度
-        "similarity_score": best_similarity,
+        "similarity": best_similarity,
         "best_agenda": best_agenda,
         "message": message,
-        "suggested_agenda": suggested_agenda,
+        "suggestedTopics": suggested_topics,
         "recent_text": recent_text,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat()
     }

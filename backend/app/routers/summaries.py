@@ -127,7 +127,7 @@ def check_meeting_deviation(meeting_id: str) -> dict:
                 "is_deviation": False,
                 "confidence": 0.0,
                 "message": "アジェンダが設定されていません",
-                "suggested_agenda": [],
+                "suggestedTopics": [],
             }
 
         # 直近の文字起こし結果を取得
@@ -137,7 +137,7 @@ def check_meeting_deviation(meeting_id: str) -> dict:
                 "is_deviation": False,
                 "confidence": 0.0,
                 "message": "文字起こしデータがありません",
-                "suggested_agenda": [],
+                "suggestedTopics": [],
             }
 
         # 脱線検知を実行
