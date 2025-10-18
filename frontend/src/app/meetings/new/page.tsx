@@ -30,7 +30,7 @@
  * - shared/lib/types.ts - 型定義
  */
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS } from "@/lib/constants";
@@ -40,7 +40,8 @@ import { generateMeetingId } from "@/lib/meetingStorage";
 import { apiClient } from "@/lib/api";
 import type { Meeting } from "@/lib/types";
 
-export default function MeetingCreationPage() {
+// useSearchParams()を使用するコンポーネントを分離
+function MeetingCreationForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editingId = searchParams?.get("id"); // 編集モードの場合はIDが渡される
@@ -696,5 +697,23 @@ export default function MeetingCreationPage() {
         />
       ))}
     </div>
+  );
+}
+
+// Suspense境界でラップしたデフォルトエクスポート
+export default function MeetingCreationPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '100vh'
+      }}>
+        読み込み中...
+      </div>
+    }>
+      <MeetingCreationForm />
+    </Suspense>
   );
 }
