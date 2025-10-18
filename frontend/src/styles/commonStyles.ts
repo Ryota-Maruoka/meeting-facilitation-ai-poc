@@ -725,7 +725,7 @@ export const commonStyles = `
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     gap: 16px;
-    padding: 24px 0;
+    padding: 8px 0;
   }
 
   .column-section {
@@ -920,7 +920,7 @@ export const commonStyles = `
     display: flex;
     justify-content: flex-end;
     gap: 12px;
-    padding: 20px 0;
+    padding: 8px 0;
     border-top: 1px solid #e6e8ee;
     background: #fafbfc;
   }
@@ -1398,5 +1398,75 @@ export const commonStyles = `
     .footer {
       flex-direction: column;
     }
+  }
+
+  /* ========================================
+     サマリー画面追加スタイル
+     ======================================== */
+
+  .body-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .details-section {
+    padding: 5px;
+    margin-bottom: 5px;
+  }
+
+  .three-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .column-section {
+    background: white;
+    border: 1px solid #e6e8ee;
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 550px;
+  }
+
+  .column-content {
+    flex: 1;
+    overflow-y: auto;
+    margin-top: 16px;
+  }
+
+  .loading-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: #6b7280;
+  }
+
+  .spinner {
+    border: 3px solid #f3f4f6;
+    border-top: 3px solid #3b82f6;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin-right: 12px;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  .footer-actions {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 5px;
+    border-top: 1px solid #e6e8ee;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 `;

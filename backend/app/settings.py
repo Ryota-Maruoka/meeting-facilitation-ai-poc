@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     
     # ASR設定
-    asr_provider: str = "whisper_cpp"  # Whisper.cpp実装を使用
+    # asr_provider: "stub" (ダミーテキスト), "whisper_python" (Python版Whisper), "whisper_cpp" (C++版Whisper)
+    asr_provider: str = "whisper_python"  # Python版Whisperを使用（安定性が高い）
     whisper_model_path: str = "./whisper-cpp/models/ggml-base.bin"
     whisper_executable_path: str = "./main.exe"  # Windowsの実行ファイル（backendディレクトリ直下）
     asr_language: str = "ja"

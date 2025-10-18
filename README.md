@@ -347,7 +347,7 @@ python test_whisper.py
 ### AI/ML
 - **Whisper.cpp** - 音声文字起こし（ローカル実行、無料）
 - **OpenAI Whisper API** - 音声文字起こし（クラウド、有料）
-- **GPT-4o mini** - 要約・提案生成（予定）
+- **Azure OpenAI API** - 要約・未決事項抽出・提案生成（GPT-4o mini使用）
 
 ## API エンドポイント
 
@@ -411,7 +411,7 @@ python test_whisper.py
 - [x] 音声形式変換（WebM → WAV）
 - [x] フロントエンド実装（基本機能）
 - [x] リアルタイム音声録音・文字起こし
-- [ ] LLM API連携（要約・提案生成）
+- [x] Azure OpenAI API連携（要約・未決事項抽出・提案生成）
 - [ ] デプロイ設定
 
 ## ライセンス

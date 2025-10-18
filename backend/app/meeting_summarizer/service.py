@@ -73,11 +73,10 @@ def _call_responses_api(
             {"role": "user", "content": asr_text}
         ],
         "max_output_tokens": 2000,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
+        "text": {
+            "format": {
+                "type": "json_schema",
                 "name": "MeetingSummary",
-                "strict": True,
                 "schema": MEETING_SUMMARY_JSON_SCHEMA
             }
         }
@@ -210,8 +209,8 @@ def _extract_json_from_response(response_data: dict) -> Optional[dict]:
         match = json.loads(response_str)
         if isinstance(match, dict) and "summary" in match:
             return match
-        
-        logger.warning("Responses APIレスポンスからJSONを抽出できませんでした")
+
+        # JSON抽出失敗（Chat Completions APIへのフォールバックが行われるため、警告不要）
         return None
     except Exception as e:
         logger.error(f"JSONパースエラー: {e}", exc_info=True)
@@ -220,15 +219,41 @@ def _extract_json_from_response(response_data: dict) -> Optional[dict]:
 
 def _validate_and_parse_summary(data: dict) -> Optional[MeetingSummaryOutput]:
     """JSONデータをスキーマ検証してMeetingSummaryOutputに変換
-    
+
     Args:
         data: パース済みJSON dict
-        
+
     Returns:
         検証済みMeetingSummaryOutput（失敗時はNone）
     """
     try:
-        return MeetingSummaryOutput(**data)
+        # Azure OpenAI APIが辞書形式で返すことがあるため、データを正規化
+        normalized_data = data.copy()
+
+        # undecidedフィールドの正規化
+        if "undecided" in normalized_data and isinstance(normalized_data["undecided"], list):
+            normalized_undecided = []
+            for item in normalized_data["undecided"]:
+                if isinstance(item, dict):
+                    # {"item": "..."} または {"issue": "..."} 形式を文字列に変換
+                    text = item.get("item") or item.get("issue") or str(item)
+                    normalized_undecided.append(text)
+                elif isinstance(item, str):
+                    normalized_undecided.append(item)
+            normalized_data["undecided"] = normalized_undecided
+
+        # decisionsフィールドの正規化
+        if "decisions" in normalized_data and isinstance(normalized_data["decisions"], list):
+            normalized_decisions = []
+            for item in normalized_data["decisions"]:
+                if isinstance(item, dict):
+                    text = item.get("item") or item.get("decision") or str(item)
+                    normalized_decisions.append(text)
+                elif isinstance(item, str):
+                    normalized_decisions.append(item)
+            normalized_data["decisions"] = normalized_decisions
+
+        return MeetingSummaryOutput(**normalized_data)
     except ValidationError as e:
         logger.error(f"スキーマ検証エラー: {e}")
         return None

@@ -15,10 +15,18 @@ app = typer.Typer(help="Meeting Facilitation AI PoC Backend")
 def server(
     host: str = typer.Option("0.0.0.0", help="バインドホスト"),
     port: int = typer.Option(8000, help="バインドポート"),
-    reload: bool = typer.Option(True, help="自動リロード"),
+    reload: bool = typer.Option(False, help="自動リロード（本番環境ではFalse推奨）"),
 ):
     """FastAPIサーバーを起動する"""
-    uvicorn.run("app.main:app", host=host, port=port, reload=reload)
+    # タイムアウトを長く設定してWhisper処理に対応
+    uvicorn.run(
+        "app.main:app",
+        host=host,
+        port=port,
+        reload=reload,
+        timeout_keep_alive=120,  # Keep-Aliveタイムアウト: 120秒
+        limit_concurrency=10,     # 同時接続数制限
+    )
 
 
 @app.command(name="summarize-meeting")
