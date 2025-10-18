@@ -176,10 +176,11 @@ JSONのみを出力してください。
                     "content": prompt
                 }
             ],
-            "max_tokens": 1000,
-            "temperature": 0.1,  # 低い温度で一貫性のある結果
-            "top_p": 0.9
+            "max_completion_tokens": 1000
         }
+        
+        logger.info(f"Azure OpenAI API呼び出し: {url}")
+        logger.info(f"APIバージョン: {self.api_version}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
