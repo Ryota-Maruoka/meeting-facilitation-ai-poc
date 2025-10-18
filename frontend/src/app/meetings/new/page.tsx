@@ -267,16 +267,14 @@ export default function MeetingCreationPage() {
         body: JSON.stringify({
           title,
           purpose,
-          expectedOutcome,
+          deliverable_template: expectedOutcome,
           meetingDate,
           participants: participants,
           agenda: agendaItems.map(item => ({
-            id: crypto.randomUUID(),
             title: item.title,
             duration: item.duration,
             expectedOutcome: item.expectedOutcome,
-            status: "pending" as const,
-            // relatedUrl: "" // 任意対応のため一旦コメントアウト
+            relatedUrl: null
           }))
         })
       });

@@ -358,10 +358,6 @@ def create_meeting(
         ValidationError: ビジネスルール違反（参加者数上限等）
         InfrastructureError: データベースエラー
 
-    Note:
-        会議作成には `consent_recording` の同意が必要。
-        同意がない場合でも会議は作成されるが、録音機能は無効化される。
-
     Example:
         >>> data = MeetingCreate(title="定例MTG", purpose="進捗確認")
         >>> meeting = await create_meeting(data, service, user)
@@ -571,7 +567,6 @@ class MeetingBase(BaseModel):
 class MeetingCreate(MeetingBase):
     """会議作成リクエスト"""
     participants: list[str] = []
-    consent_recording: bool = False
 
 class MeetingOut(MeetingBase):
     """会議レスポンス"""
@@ -614,7 +609,6 @@ class MeetingCreate(BaseModel):
                     "purpose": "進捗確認と課題共有",
                     "deliverable_template": "決定事項・アクション",
                     "participants": ["alice@example.com", "bob@example.com"],
-                    "consent_recording": True
                 }
             ]
         }
@@ -1124,7 +1118,6 @@ async def test_create_meeting(client: AsyncClient):
         "purpose": "Testing",
         "deliverable_template": "Summary",
         "participants": [],
-        "consent_recording": True
     })
     assert response.status_code == 201
     data = response.json()

@@ -199,6 +199,10 @@ def transcribe_with_whisper_cpp(audio_data: bytes) -> List[Dict]:
             cwd=os.path.dirname(whisper_exe)  # Whisper.cppのディレクトリで実行
         )
         
+        print(f"Whisper.cpp return code: {result.returncode}")
+        print(f"Whisper.cpp stdout: {result.stdout}")
+        print(f"Whisper.cpp stderr: {result.stderr}")
+        
         if result.returncode != 0:
             print(f"Whisper.cpp error: {result.stderr}")
             raise RuntimeError(f"Whisper.cpp failed: {result.stderr}")
@@ -207,12 +211,16 @@ def transcribe_with_whisper_cpp(audio_data: bytes) -> List[Dict]:
         with open(temp_json_path, 'r', encoding='utf-8') as f:
             result_data = json.load(f)
         
+        print(f"Whisper.cpp JSON result: {result_data}")
+        
         # 一時ファイルを削除
         os.unlink(temp_audio_path)
         os.unlink(temp_json_path)
         
         # 結果をパース
-        return parse_whisper_result(result_data)
+        parsed_result = parse_whisper_result(result_data)
+        print(f"Parsed result: {parsed_result}")
+        return parsed_result
         
     except Exception as e:
         print(f"Whisper.cpp error: {e}")
