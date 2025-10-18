@@ -1,15 +1,17 @@
 """会議管理エンドポイント"""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from ..schemas.meeting import Meeting, MeetingCreate
 from ..storage import DataStore
 from ..services.meeting_scheduler import get_scheduler
+from ..meeting_summarizer.service import summarize_meeting
 from ..settings import settings
 
 logger = logging.getLogger(__name__)
@@ -49,7 +51,6 @@ def _normalize_meeting_dict(meeting_dict: dict) -> dict:
         "decisions",
         "actions",
         "parking",
-        "ended_at",
         "summary",
         "mini_summary",
         "deviation_alerts",
@@ -71,8 +72,13 @@ def list_meetings() -> list[Meeting]:
     Returns:
         会議一覧
     """
-    meetings = store.list_meetings()
-    return [Meeting(**_normalize_meeting_dict(meeting)) for meeting in meetings]
+    try:
+        meetings = store.list_meetings()
+        return [Meeting(**_normalize_meeting_dict(meeting)) for meeting in meetings]
+    except Exception as e:
+        logger.error("Failed to list meetings: %s", e, exc_info=True)
+        # エラー時は空のリストを返す
+        return []
 
 
 @router.post("", response_model=Meeting, status_code=201)
@@ -195,7 +201,7 @@ def update_meeting(meeting_id: str, payload: dict) -> Meeting:
 
 
 @router.post("/{meeting_id}/start", response_model=Meeting)
-def start_meeting(meeting_id: str) -> Meeting:
+async def start_meeting(meeting_id: str) -> Meeting:
     """会議を開始する。
 
     Args:
@@ -222,33 +228,13 @@ def start_meeting(meeting_id: str) -> Meeting:
 
     # 3分ごとの要約生成スケジューラーを開始
     scheduler = get_scheduler()
-    scheduler.start_meeting_scheduler(meeting_id)
+    await scheduler.start_meeting_scheduler(meeting_id)
 
     return Meeting(**_normalize_meeting_dict(meeting))
 
 
-@router.post("/{meeting_id}/end", response_model=Meeting)
-async def end_meeting(meeting_id: str) -> Meeting:
-    """会議を終了する。
-
-    Args:
-        meeting_id: 会議ID
-
-    Returns:
-        更新された会議情報
-
-    Raises:
-        HTTPException: 会議が見つからない場合
-    """
-    meeting = store.load_meeting(meeting_id)
-    if not meeting:
-        raise HTTPException(404, "Meeting not found")
-
-    # 3分ごとの要約生成スケジューラーを停止
-    scheduler = get_scheduler()
-    scheduler.stop_meeting_scheduler(meeting_id)
-
-    # 最終要約を生成（まだ生成されていない場合、または最新データで更新）
+async def _generate_final_summary_background(meeting_id: str):
+    """バックグラウンドで最終要約を生成する"""
     try:
         transcripts = store.load_transcripts(meeting_id)
         if transcripts:
@@ -257,9 +243,6 @@ async def end_meeting(meeting_id: str) -> Meeting:
                 logger.info("Generating final summary for meeting %s", meeting_id)
 
                 # 非同期で要約を生成
-                import asyncio
-                from ..meeting_summarizer.service import summarize_meeting
-
                 summary_result = await asyncio.to_thread(
                     summarize_meeting, all_text, verbose=True
                 )
@@ -277,6 +260,29 @@ async def end_meeting(meeting_id: str) -> Meeting:
     except Exception as e:
         logger.error("Failed to generate final summary: %s", e)
 
+
+@router.post("/{meeting_id}/end", response_model=Meeting)
+async def end_meeting(meeting_id: str, background_tasks: BackgroundTasks) -> Meeting:
+    """会議を終了する。
+
+    Args:
+        meeting_id: 会議ID
+        background_tasks: FastAPIバックグラウンドタスク
+
+    Returns:
+        更新された会議情報
+
+    Raises:
+        HTTPException: 会議が見つからない場合
+    """
+    meeting = store.load_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+
+    # 1分ごとの要約生成スケジューラーを停止
+    scheduler = get_scheduler()
+    scheduler.stop_meeting_scheduler(meeting_id)
+
     # 会議終了時刻を記録
     meeting["ended_at"] = datetime.now(timezone.utc).isoformat()
     meeting["status"] = "completed"
@@ -285,6 +291,9 @@ async def end_meeting(meeting_id: str) -> Meeting:
     # 保存
     store.save_meeting(meeting_id, meeting)
     logger.info("Meeting ended: %s", meeting_id)
+
+    # 最終要約をバックグラウンドで生成
+    background_tasks.add_task(_generate_final_summary_background, meeting_id)
 
     return Meeting(**_normalize_meeting_dict(meeting))
 

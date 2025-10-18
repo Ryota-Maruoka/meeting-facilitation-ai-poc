@@ -179,6 +179,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       // 録音開始時は文字起こし結果をクリアしない（既存の結果を保持）
       
       // マイクアクセスを要求
+      console.log("🎤 マイクアクセスを要求中...");
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000, // Whisper推奨サンプルレート
@@ -187,7 +188,15 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
           noiseSuppression: true,
         },
       });
-      
+
+      console.log("✅ マイクアクセス成功");
+      console.log("🎧 オーディオトラック情報:", stream.getAudioTracks().map(track => ({
+        label: track.label,
+        enabled: track.enabled,
+        muted: track.muted,
+        settings: track.getSettings()
+      })));
+
       streamRef.current = stream;
       startTimeRef.current = Date.now();
       
@@ -261,24 +270,24 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
         setError("録音中にエラーが発生しました");
       };
 
-      // ✅ 10秒ごとに ondataavailable が自動で発火
-      mediaRecorder.start(10000);
-      
-      // ✅ 10秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
+      // ✅ 30秒ごとに ondataavailable が自動で発火（負荷軽減のため10秒→30秒に変更）
+      mediaRecorder.start(30000);
+
+      // ✅ 30秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
       const recordingInterval = setInterval(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-          console.log("🔄 10秒経過：録音を停止→再開");
+          console.log("🔄 30秒経過：録音を停止→再開");
           mediaRecorderRef.current.stop();
-          
+
           // 少し待ってから再開（ondataavailableの完了を待つ）
           setTimeout(() => {
             if (mediaRecorderRef.current && streamRef.current) {
               audioChunksRef.current = []; // チャンクをクリア
-              mediaRecorderRef.current.start(10000);
+              mediaRecorderRef.current.start(30000);
             }
           }, 100);
         }
-      }, 10000); // 10秒ごと
+      }, 30000); // 30秒ごと
       
       // インターバルIDを保存（停止時にクリアするため）
       (mediaRecorderRef.current as any).recordingIntervalId = recordingInterval;
@@ -356,88 +365,13 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   }
 
   return (
-    <Card sx={{ height: "500px" }}>
-      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        {/* <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}> */}
-          {/* クリアボタン（一時的にコメントアウト） */}
-          {/* {transcripts.length > 0 && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<ClearIcon />}
-              onClick={clearTranscripts}
-              disabled={isRecording || isProcessing}
-              sx={{ minWidth: "auto" }}
-            >
-              クリア
-            </Button>
-          )} */}
-        {/* </Box> */}
-        <Box sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
-      {/* 録音コントロール */}
-      <Box sx={{ mb: 2, display: "flex", gap: 2, justifyContent: "center", alignItems: "center" }}>
-        {!isRecording ? (
-          <Button
-            variant="contained"
-            color="error"
-            startIcon={<MicIcon />}
-            onClick={startRecording}
-            size="large"
-            disabled={isProcessing}
-          >
-            録音開始
-          </Button>
-        ) : (
-          <>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<StopIcon />}
-              onClick={stopRecording}
-              size="large"
-              disabled={isProcessing}
-            >
-              録音停止
-            </Button>
-            
-            {/* 録音中インジケーター */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Box
-                sx={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  backgroundColor: "error.main",
-                  animation: "pulse 1.5s ease-in-out infinite",
-                  "@keyframes pulse": {
-                    "0%, 100%": { opacity: 1 },
-                    "50%": { opacity: 0.3 },
-                  },
-                }}
-              />
-              <Typography variant="body2" color="error" sx={{ fontWeight: 600 }}>
-                録音中（10秒ごとに文字起こし）
-              </Typography>
-            </Box>
-          </>
-        )}
-      </Box>
-
+    <Card sx={{ height: "500px", display: "flex", flexDirection: "column" }}>
+      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "auto", p: 2 }}>
       {/* エラー表示 */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
-      )}
-
-      {/* 処理中表示 */}
-      {isProcessing && (
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 2 }}>
-          <CircularProgress size={24} sx={{ mr: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            文字起こし処理中...
-          </Typography>
-        </Box>
       )}
 
       {/* 字幕表示エリア */}
@@ -447,8 +381,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
           flexGrow: 1,
           p: 2,
           backgroundColor: "grey.50",
-          overflow: "auto",
-          maxHeight: "400px",
+          overflow: "visible",
         }}
       >
         {transcripts.length === 0 ? (
@@ -463,7 +396,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
             >
               <Box>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {isRecording ? "🎤 音声を認識中... 10秒ごとに文字起こしされます" : "録音を開始してください"}
+                  {isRecording ? "音声を認識中..." : "録音を開始してください"}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   音声が文字起こしされてここに表示されます
@@ -527,37 +460,15 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
         )}
       </Paper>
 
-      {/* 録音状態表示 */}
-      {isRecording && (
-        <Box
-          sx={{
-            mt: 2,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 1,
-          }}
-        >
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: "error.main",
-              animation: "pulse 1.5s infinite",
-              "@keyframes pulse": {
-                "0%": { opacity: 1 },
-                "50%": { opacity: 0.5 },
-                "100%": { opacity: 1 },
-              },
-            }}
-          />
-          <Typography variant="body2" color="error.main" sx={{ fontWeight: 500 }}>
-            録音中
+      {/* 処理中表示（文字起こしリストの下に配置） */}
+      {isProcessing && (
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 2, mt: 2 }}>
+          <CircularProgress size={24} sx={{ mr: 1 }} />
+          <Typography variant="body2" color="text.secondary">
+            文字起こし処理中...
           </Typography>
         </Box>
       )}
-        </Box>
       </CardContent>
     </Card>
   );

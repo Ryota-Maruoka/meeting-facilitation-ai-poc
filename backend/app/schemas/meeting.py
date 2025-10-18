@@ -48,6 +48,8 @@ class Meeting(BaseModel):
     id: str
     created_at: datetime = Field(serialization_alias="createdAt")
     updated_at: datetime = Field(serialization_alias="updatedAt")
+    started_at: datetime | None = Field(None, serialization_alias="startedAt")
+    ended_at: datetime | None = Field(None, serialization_alias="endedAt")
     title: str
     purpose: str
     deliverable_template: str
@@ -55,4 +57,5 @@ class Meeting(BaseModel):
     participants: list[str]
     agenda: list[AgendaItem]
     status: str = "draft"
+    consent_recording: bool = Field(False, serialization_alias="consentRecording")
 

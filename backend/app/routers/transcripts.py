@@ -121,7 +121,13 @@ async def transcribe_audio_upload(
 
         try:
             # 音声文字起こし実行
+            logger.info("=== 文字起こし開始 ===")
+            print(f"=== 文字起こし開始: {temp_file_path} ===")
+
             result = await transcribe_audio_file(temp_file_path)
+
+            logger.info("=== 文字起こし完了 ===")
+            print(f"=== 文字起こし完了: {result} ===")
             logger.info("Transcription completed: %s", result)
 
             # 文字起こし結果にIDとタイムスタンプを追加

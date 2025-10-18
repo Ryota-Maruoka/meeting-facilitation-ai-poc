@@ -142,14 +142,33 @@ class DataStore:
         if not os.path.exists(meetings_dir):
             return meetings
 
-        for item in os.listdir(meetings_dir):
-            item_path = os.path.join(meetings_dir, item)
-            # ディレクトリのみを対象にする
-            if os.path.isdir(item_path):
-                meeting_id = item
-                meeting = self.load_meeting(meeting_id)
-                if meeting:
-                    meetings.append(meeting)
+        try:
+            for item in os.listdir(meetings_dir):
+                item_path = os.path.join(meetings_dir, item)
+
+                # 新形式: ディレクトリ
+                if os.path.isdir(item_path):
+                    meeting_id = item
+                    meeting = self.load_meeting(meeting_id)
+                    if meeting:
+                        meetings.append(meeting)
+
+                # 旧形式: {meeting_id}.json ファイル（後方互換性）
+                elif item.endswith(".json"):
+                    meeting_id = item[:-5]  # .jsonを除去
+                    # 旧形式のファイルを読み込む
+                    old_path = os.path.join(meetings_dir, item)
+                    try:
+                        with open(old_path, "r", encoding="utf-8") as f:
+                            meeting = json.load(f)
+                            if meeting:
+                                meetings.append(meeting)
+                    except Exception as e:
+                        print(f"Warning: Failed to load old format meeting {item}: {e}")
+
+        except Exception as e:
+            print(f"Error listing meetings: {e}")
+            return []
 
         # 作成日時で降順ソート（新しい順）
         meetings.sort(key=lambda x: x.get("created_at", ""), reverse=True)

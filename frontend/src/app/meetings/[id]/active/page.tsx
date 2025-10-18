@@ -121,8 +121,8 @@ export default function MeetingActivePage() {
   useEffect(() => {
     if (!isMeetingStarted) return;
 
-    // 3分ごとに要約を生成・取得
-    const summaryInterval = setInterval(async () => {
+    // 要約を生成・取得する関数
+    const fetchSummary = async () => {
       try {
         console.log("要約を生成中...");
         // 要約を生成
@@ -138,7 +138,13 @@ export default function MeetingActivePage() {
       } catch (error) {
         console.error("要約の取得に失敗しました:", error);
       }
-    }, 3 * 60 * 1000); // 3分 = 180秒 = 180,000ミリ秒
+    };
+
+    // 初回実行（会議開始直後）
+    fetchSummary();
+
+    // 3分ごとに要約を生成・取得
+    const summaryInterval = setInterval(fetchSummary, 3 * 60 * 1000); // 3分 = 180秒 = 180,000ミリ秒
 
     return () => clearInterval(summaryInterval);
   }, [isMeetingStarted, meetingId]);
@@ -220,15 +226,13 @@ export default function MeetingActivePage() {
       const now = new Date();
       setMeetingStartTime(now);
       setIsMeetingStarted(true);
-
-      showSuccess("会議を開始しました");
     } catch (error) {
       console.error("Failed to start meeting:", error);
       showSuccess("会議の開始に失敗しました");
     }
   };
 
-  const handleEndMeetingConfirm = async () => {
+  const handleEndMeetingConfirm = () => {
     // 会議終了時に会議レポート用のデータを保存
     if (meetingData && meetingStartTime) {
       // 経過時間を計算（分単位）
@@ -244,18 +248,17 @@ export default function MeetingActivePage() {
 
       sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
 
-      // APIで会議終了を呼び出し
-      try {
-        await apiClient.endMeeting(meetingId);
+      // APIで会議終了を呼び出し（非同期で実行し、完了を待たない）
+      apiClient.endMeeting(meetingId).then(() => {
         console.log("Meeting ended successfully");
-      } catch (error) {
+      }).catch((error) => {
         console.error("Failed to end meeting:", error);
-        showSuccess("会議は終了しましたが、ステータスの更新に失敗しました");
-      }
+      });
     }
 
     console.log("会議終了:", meetingId);
     setEndModalOpen(false);
+    // 即座に画面遷移（文字起こし処理の完了を待たない）
     router.push(`/meetings/${meetingId}/summary`);
   };
 
@@ -374,7 +377,7 @@ export default function MeetingActivePage() {
         <div className="body-content">
           {/* 会議情報セクション */}
           <div className="meeting-info-section">
-          <div className="meeting-info">
+          <div className="meeting-info" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
             <div className="meeting-info-item">
               <strong>会議名:</strong>
               <span>{meetingData?.title || "読み込み中..."}</span>
@@ -391,20 +394,20 @@ export default function MeetingActivePage() {
               <strong>参加者:</strong>
               <span>{meetingData?.participants.join("、") || "なし"}</span>
             </div>
-          </div>
 
-          {/* 会議開始ボタン（会議開始前のみ表示） */}
-          {!isMeetingStarted && (
-            <div style={{ marginTop: "16px", textAlign: "center" }}>
-              <button
-                className="btn btn-success btn-large"
-                onClick={handleStartMeeting}
-                style={{ fontSize: "16px", padding: "12px 32px" }}
-              >
-                会議開始
-              </button>
-            </div>
-          )}
+            {/* 会議開始ボタン（会議開始前のみ表示） */}
+            {!isMeetingStarted && (
+              <div style={{ marginLeft: "auto" }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleStartMeeting}
+                  style={{ fontSize: "14px", padding: "8px 24px" }}
+                >
+                  会議開始
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* アジェンダ進捗バー */}
@@ -444,7 +447,7 @@ export default function MeetingActivePage() {
           <div className="column-section">
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.TRANSCRIBE}</span>
-              <span>ライブ字幕</span>
+              <span>文字起こし</span>
             </div>
             <div className="section-content">
               <LiveTranscriptArea

@@ -1,4 +1,4 @@
-"""会議スケジューラー - 3分ごとの要約生成バッチ処理"""
+"""会議スケジューラー - 1分ごとの要約生成バッチ処理"""
 import asyncio
 import logging
 from typing import Dict, Set
@@ -19,7 +19,7 @@ class MeetingScheduler:
         self.active_meetings: Set[str] = set()
         self.tasks: Dict[str, asyncio.Task] = {}
 
-    def start_meeting_scheduler(self, meeting_id: str):
+    async def start_meeting_scheduler(self, meeting_id: str):
         """会議の要約スケジューラーを開始する
 
         Args:
@@ -30,7 +30,9 @@ class MeetingScheduler:
             return
 
         self.active_meetings.add(meeting_id)
-        task = asyncio.create_task(self._run_summary_loop(meeting_id))
+        # イベントループを取得してタスクを作成
+        loop = asyncio.get_event_loop()
+        task = loop.create_task(self._run_summary_loop(meeting_id))
         self.tasks[meeting_id] = task
         logger.info(f"Started summary scheduler for meeting {meeting_id}")
 
@@ -51,15 +53,15 @@ class MeetingScheduler:
         logger.info(f"Stopped summary scheduler for meeting {meeting_id}")
 
     async def _run_summary_loop(self, meeting_id: str):
-        """3分ごとに要約を生成するループ
+        """1分ごとに要約を生成するループ
 
         Args:
             meeting_id: 会議ID
         """
         try:
             while meeting_id in self.active_meetings:
-                # 3分待機
-                await asyncio.sleep(3 * 60)  # 180秒
+                # 1分待機
+                await asyncio.sleep(1 * 60)  # 60秒
 
                 # まだアクティブかチェック
                 if meeting_id not in self.active_meetings:

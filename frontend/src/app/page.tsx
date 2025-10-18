@@ -84,7 +84,6 @@ export default function MeetingHistoryPage() {
         setInitialData(formattedMeetings);
       } catch (error) {
         console.error("Failed to fetch meetings:", error);
-        showError("会議データの取得に失敗しました");
       }
     }
     fetchMeetings();
@@ -127,7 +126,7 @@ export default function MeetingHistoryPage() {
   const [deletingMeeting, setDeletingMeeting] = useState<DisplayMeeting | null>(null);
 
   // トースト通知
-  const { toasts, showSuccess, showError, removeToast } = useToast();
+  const { toasts, showSuccess, removeToast } = useToast();
 
   // -----------------------------
   // ユーティリティ関数
@@ -305,7 +304,6 @@ export default function MeetingHistoryPage() {
         showSuccess("会議を削除しました");
       } catch (error) {
         console.error("Failed to delete meeting:", error);
-        showError("会議の削除に失敗しました");
       } finally {
         setDeleteModalOpen(false);
         setDeletingMeeting(null);
