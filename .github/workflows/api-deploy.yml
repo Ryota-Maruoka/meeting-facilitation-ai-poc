@@ -1,0 +1,72 @@
+# .github/workflows/api-deploy.yml
+name: Deploy API app to ECS via ECR
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Event : workflow_dispatch                                                 ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+on:
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'api/app/**'
+  workflow_dispatch:
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Environment                                                               ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+env:
+  AWS_REGION: ap-northeast-1
+  AWS_ACCOUNT_ID: 688567301060
+  ECR_REPOSITORY: bemac-meeting-dev-be-ecr
+  ECS_CLUSTER_NAME: bemac-meeting-dev-be-cluster
+  ECS_CONTAINER_NAME: bemac-meeting-dev-be-container
+  ECS_SERVICE_NAME: bemac-meeting-dev-be-service
+  ECS_TASK_DEFINITION_NAME: bemac-meeting-dev-be-task-definition
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### jobs                                                                      ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # Checkout
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          submodules: true
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # イメージタグ
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Settings for image-tag
+        run: |
+          echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c 1-7)" >> $GITHUB_ENV
+          # echo "IMAGE_TAG=aabbc01" >> $GITHUB_ENV
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # デプロイ: API Service
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Deploy API Service to ECS
+        uses: ./.github/actions/deploy/ecs
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          image-tag: ${{ env.IMAGE_TAG }}
+          aws-access-key-id: ${{ secrets.AICOMPASS_DEMO_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AICOMPASS_DEMO_AWS_SECRET_ACCESS_KEY }}
+          ecr-repository: ${{ env.ECR_REPOSITORY }}
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          cluster-name: ${{ env.ECS_CLUSTER_NAME }}
+          service-name: ${{ env.ECS_SERVICE_NAME }}
+          task-definition-name: ${{ env.ECS_TASK_DEFINITION_NAME }}
+          dockerfile: .github/docker/api/Dockerfile
+          context: backend
+          skip-build: 'false'

@@ -1,0 +1,165 @@
+# .github/workflows/deploy.yml
+name: Deploy frontend app to ECS via ECR and static assets to S3/CloudFront
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Event : workflow_dispatch                                                 ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+on:
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'web/app/**'
+  workflow_dispatch:
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Environment                                                               ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+env:
+  AWS_REGION: ap-northeast-1
+  AWS_ACCOUNT_ID: 688567301060
+  ECR_REPOSITORY: bemac-meeting-dev-fe-ecr
+  ECS_CONTAINER_NAME: bemac-meeting-dev-fe-container
+  ECS_CLUSTER_NAME: bemac-meeting-dev-fe-cluster
+  ECS_SERVICE_NAME: bemac-meeting-dev-fe-service
+  ECS_TASK_DEFINITION_NAME: bemac-meeting-dev-fe-task-definition
+  # S3_BUCKET_NAME: aicanvas-kagetalk-s3-bucket
+  # CLOUDFRONT_DISTRIBUTION_ID: E2NUYGSPFMSGQJ  # CloudFrontディストリビューションID
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### jobs                                                                      ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # Checkout
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          submodules: true
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # Node.js環境
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # distribution: "node"
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      # - name: Cache npm packages
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: ~/.npm
+      #     key: ${{ runner.os }}-npm-${{ hashFiles('**/*.npm') }}
+      #     restore-keys: ${{ runner.os }}-npm
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # プロパティファイルの読み込み先を設定
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # - name: Set for access RDS
+      #   run: |
+      #     ### Change direction of properties to read for
+      #     sed -i "s|jdbc:postgresql://hook.db:5432/hook|jdbc:postgresql://aicompass-demo-cluster.cluster-cbie0wkyawlg.ap-northeast-1.rds.amazonaws.com:5432/demo|" ./src/main/resources/application.yml || true
+      #     sed -i "s|username: frnippou1|username: diagnosis|" ./src/main/resources/application.yml || true
+      #     sed -i "s|password: frnippou1|password: diagnosis|" ./src/main/resources/application.yml || true
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # イメージタグ
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Settings for image-tag
+        run: |
+          echo "IMAGE_TAG=$(echo ${{ github.sha }} | cut -c 1-7)" >> $GITHUB_ENV
+          # echo "IMAGE_TAG=aabbc01" >> $GITHUB_ENV
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # AWS認証設定
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AICOMPASS_DEMO_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AICOMPASS_DEMO_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # Next.jsビルド
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # - name: Install dependencies and build Next.js
+      #   working-directory: web/app
+      #   env:
+      #     # ビルド時に必要な環境変数（ダミー値でもビルドは通る）
+      #     DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy?schema=public"
+      #     NEXTAUTH_URL: "https://localhost:3000"
+      #     NEXTAUTH_SECRET: "dummy-secret-for-build"
+      #     NEXT_PUBLIC_STORAGE_ENCRYPTION_KEY: ${{ env.NEXT_PUBLIC_STORAGE_ENCRYPTION_KEY }}
+      #   run: |
+      #     npm ci
+      #     npx prisma generate
+      #     npm run build
+      #     echo "Build completed successfully"
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # 静的ファイルをS3にアップロード
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # - name: Deploy static assets to S3
+      #   working-directory: web/app
+      #   run: |
+      #     # 静的ファイル（.next/static）をS3にアップロード
+      #     aws s3 sync .next/static s3://${{ env.S3_BUCKET_NAME }}/_next/static \
+      #       --delete \
+      #       --cache-control "public, max-age=31536000, immutable"
+          
+      #     # publicディレクトリの内容をS3にアップロード
+      #     aws s3 sync public s3://${{ env.S3_BUCKET_NAME }}/public \
+      #       --delete \
+      #       --cache-control "public, max-age=3600"
+          
+      #     # landingページなどの静的HTMLをS3にアップロード（もし存在すれば）
+      #     if [ -d "out" ]; then
+      #       aws s3 sync out s3://${{ env.S3_BUCKET_NAME }}/landing \
+      #         --delete \
+      #         --cache-control "public, max-age=3600"
+      #     fi
+          
+      #     echo "Static assets uploaded to S3 successfully"
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # CloudFrontキャッシュ無効化
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # - name: Invalidate CloudFront cache
+      #   run: |
+      #     aws cloudfront create-invalidation \
+      #       --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
+      #       --paths "/_next/static/*" "/public/*" "/landing/*" \
+      #       --query 'Invalidation.Id' \
+      #       --output text
+      #     echo "CloudFront cache invalidation initiated"
+
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      # ECSへのデプロイ（動的コンテンツ用）
+      # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - #
+      - name: Deploy to ECS
+        uses: ./.github/actions/deploy/ecs
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          image-tag: ${{ env.IMAGE_TAG }}
+          aws-access-key-id: ${{ secrets.AICOMPASS_DEMO_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AICOMPASS_DEMO_AWS_SECRET_ACCESS_KEY }}
+          ecr-repository: ${{ env.ECR_REPOSITORY }}
+          container-name: ${{ env.ECS_CONTAINER_NAME }}
+          cluster-name: ${{ env.ECS_CLUSTER_NAME }}
+          service-name: ${{ env.ECS_SERVICE_NAME }}
+          task-definition-name: ${{ env.ECS_TASK_DEFINITION_NAME }}
+          dockerfile: .github/docker/web/Dockerfile
+          context: frontend

@@ -1,0 +1,353 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: bemac-meeting-dev-fe-ecs-stacks
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Capabilities                                                                                  ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "System Configuration"
+        Parameters:
+          - CustomerName
+          - ProjectName
+          - Environment
+          - SystemName
+    ParameterLabels:
+      CustomerName:
+        default: "Customer Name"
+      ProjectName:
+        default: "Project Name"
+      Environment:
+        default: "Environment"
+      SystemName:
+        default: "System Name"
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Parameters                                                                                    ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Parameters:
+  CustomerName:
+    Type: String
+    Default: bemac
+
+  ProjectName:
+    Type: String
+    Default: meeting
+
+  Environment:
+    Type: String
+    Default: dev
+
+  SystemName:
+    Type: String
+    Default: bemac-meeting-system
+
+  ContainerCpu:
+    Type: Number
+    Default: 512
+
+  ContainerMemory:
+    Type: Number
+    Default: 1024
+
+  DesiredCount:
+    Type: Number
+    Default: 0
+
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Resources                                                                                     ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Resources:
+  # ----------------------------------------------------------------------------- #
+  # Security Group for FE ECS
+  # ----------------------------------------------------------------------------- #
+  FeEcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-ecs-sg
+      GroupDescription: Security group for Frontend ECS tasks
+      VpcId:
+        Fn::ImportValue: aicompass-demo-VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeAlbSecurityGroupId
+          Description: HTTP access from ALB
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound traffic
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-ecs-sg
+
+  # ----------------------------------------------------------------------------- #
+  # ECS Cluster
+  # ----------------------------------------------------------------------------- #
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # Role
+  # ----------------------------------------------------------------------------- #
+  EcsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${CustomerName}-${ProjectName}-${Environment}-ecs-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-*'
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${CustomerName}-${ProjectName}-${Environment}-ecs-task-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:*
+                  - logs:*
+                Resource: '*'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-*'
+        - PolicyName: ParameterStoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${CustomerName}/${ProjectName}/${Environment}/*'
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # ECS TaskDefinition
+  # ----------------------------------------------------------------------------- #
+  FrontendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-task-definition
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt EcsExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-container
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/accounting-repository:latest
+          PortMappings:
+            - HostPort: 3000
+              ContainerPort: 3000
+              Protocol: tcp
+          # Secrets:
+          #   - Name: AUTH_COGNITO_ID
+          #     ValueFrom: !Sub 'arn:aws:secretsmanager:ap-northeast-1:688567301060:secret:accounting-aicanvas-fe-AvbTIT:AUTH_COGNITO_ID::'
+          #   - Name: AUTH_COGNITO_SECRET
+          #     ValueFrom: !Sub 'arn:aws:secretsmanager:ap-northeast-1:688567301060:secret:accounting-aicanvas-fe-AvbTIT:AUTH_COGNITO_SECRET::'
+          #   - Name: AUTH_COGNITO_ISSUER
+          #     ValueFrom: !Sub 'arn:aws:secretsmanager:ap-northeast-1:688567301060:secret:accounting-aicanvas-fe-AvbTIT:AUTH_COGNITO_ISSUER::'
+          #   - Name: AUTH_COGNITO_DOMAIN
+          #     ValueFrom: !Sub 'arn:aws:secretsmanager:ap-northeast-1:688567301060:secret:accounting-aicanvas-fe-AvbTIT:AUTH_COGNITO_DOMAIN::'
+          #   - Name: NEXT_PUBLIC_API_URL
+          #     ValueFrom: !Sub 'arn:aws:secretsmanager:ap-northeast-1:688567301060:secret:accounting-aicanvas-fe-AvbTIT:NEXT_PUBLIC_API_URL::'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${CustomerName}-${ProjectName}-${Environment}-fe-ecs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # CloudWatch
+  # ----------------------------------------------------------------------------- #
+  FrontendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${CustomerName}-${ProjectName}-${Environment}-fe-ecs
+      RetentionInDays: 14
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # ECS Service
+  # ----------------------------------------------------------------------------- #
+  FrontendService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - FrontendLogGroup
+    Properties:
+      ServiceName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-service
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref FrontendTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - !Ref FeEcsSecurityGroup
+          Subnets:
+            - Fn::ImportValue: aicompass-demo-PrivateSubnet1Id
+      LoadBalancers:
+        - ContainerName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-container
+          ContainerPort: 3000
+          TargetGroupArn:
+            Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeTargetGroupArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DeploymentController:
+        Type: ECS
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Outputs                                                                                       ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Outputs:
+  ClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeEcsClusterName
+
+  FeEcsSecurityGroupId:
+    Description: Frontend ECS Security Group ID
+    Value: !Ref FeEcsSecurityGroup
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeEcsSecurityGroupId
+
+  FrontendTaskDefinitionArn:
+    Description: Frontend Task Definition ARN
+    Value: !Ref FrontendTaskDefinition
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeTaskDefinitionArn
+
+  EcsExecutionRoleArn:
+    Description: ECS Execution Role ARN
+    Value: !GetAtt EcsExecutionRole.Arn
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-FeEcsExecutionRoleArn
