@@ -5,6 +5,8 @@
  */
 
 // API設定
+// 本番環境では /api (リライトでバックエンドにプロキシ)
+// 開発環境では http://localhost:8000 (直接アクセス)
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 // 会議設定
