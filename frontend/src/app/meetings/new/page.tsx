@@ -49,6 +49,9 @@ function MeetingCreationForm() {
   // -----------------------------
   // ステート
   // -----------------------------
+  const [meetingId, setMeetingId] = useState<string>(() => {
+    return editingId || generateMeetingId();
+  });// 会議ID（編集モードの場合はeditingId、新規の場合は生成したIDを使用）
   const [title, setTitle] = useState<string>("");
   const [purpose, setPurpose] = useState<string>("");
   const [expectedOutcome, setExpectedOutcome] = useState<string>("");
@@ -233,11 +236,14 @@ function MeetingCreationForm() {
         await apiClient.updateMeeting(editingId, meetingData);
         showSuccess("下書きを更新しました");
       } else {
-        // 新規作成：新しい会議を作成
-        const meeting = await apiClient.createMeeting(meetingData);
+        // 新規作成：生成済みのIDで会議を作成
+        const meeting = await apiClient.createMeetingWithId({
+          ...meetingData,
+          id: meetingId
+        });
         showSuccess("下書きを保存しました");
         // URLを編集モードに変更
-        router.replace(`/meetings/new?id=${meeting.id}`);
+        router.replace(`/meetings/new?id=${meetingId}`);
       }
     } catch (error) {
       console.error("Failed to save draft:", error);
@@ -259,33 +265,23 @@ function MeetingCreationForm() {
     }
 
     try {
-      // バックエンドAPIで会議を作成
-      const response = await fetch(`${API_BASE_URL}/meetings`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title,
-          purpose,
-          deliverable_template: expectedOutcome,
-          meetingDate,
-          participants: participants,
-          agenda: agendaItems.map(item => ({
-            title: item.title,
-            duration: item.duration,
-            expectedOutcome: item.expectedOutcome,
-            relatedUrl: null
-          }))
-        })
+      // バックエンドAPIで会議を作成（既存のIDを使用）
+      const meeting = await apiClient.createMeetingWithId({
+        id: meetingId, // 生成済みのIDを使用
+        title,
+        purpose,
+        expectedOutcome: expectedOutcome,
+        meetingDate,
+        participants: participants,
+        agenda: agendaItems.map(item => ({
+          id: crypto.randomUUID(),
+          title: item.title,
+          duration: item.duration,
+          expectedOutcome: item.expectedOutcome,
+          relatedUrl: undefined,
+          status: "pending" as const
+        }))
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const meeting = await response.json();
-      const meetingId = meeting.id;
 
       // 会議データをsessionStorageに保存（会議中画面で使用）
       const meetingData = {

@@ -122,6 +122,9 @@ export type ApiResponse<T> = {
 // 会議作成用のデータ
 export type MeetingCreate = Omit<Meeting, "id" | "created_at" | "updated_at" | "status">;
 
+// IDを指定して会議を作成する場合の型
+export type MeetingCreateWithId = MeetingCreate & { id: string };
+
 // アジェンダ作成用のデータ
 export type AgendaItemCreate = Omit<AgendaItem, "id" | "status">;
 

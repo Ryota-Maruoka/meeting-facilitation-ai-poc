@@ -8,6 +8,7 @@ import { API_BASE_URL, ERROR_MESSAGES } from "./constants";
 import type {
   Meeting,
   MeetingCreate,
+  MeetingCreateWithId,
   AgendaItem,
   AgendaItemCreate,
   Transcript,
@@ -123,6 +124,18 @@ class ApiClient {
   async createMeeting(data: MeetingCreate): Promise<Meeting> {
     // 実APIへ作成リクエスト
     const payload = this.mapFrontendCreateToBackend(data);
+    const created = await this.request<Record<string, unknown>>(`/meetings`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const meeting = this.mapBackendMeetingToFrontend(created);
+    return meeting;
+  }
+
+  async createMeetingWithId(data: MeetingCreateWithId): Promise<Meeting> {
+    // IDを指定して会議を作成
+    const payload = this.mapFrontendCreateToBackend(data);
+    payload.id = data.id; // IDを追加
     const created = await this.request<Record<string, unknown>>(`/meetings`, {
       method: "POST",
       body: JSON.stringify(payload),
