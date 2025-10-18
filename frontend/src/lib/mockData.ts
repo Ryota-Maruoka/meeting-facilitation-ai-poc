@@ -217,15 +217,15 @@ export const mockDeviationAlert: DeviationAlert = {
   id: "deviation-1",
   is_deviation: true,
   confidence: 0.8,
-  similarity_score: 0.3,
+  similarity: 0.3,
   best_agenda: "認証方式の確認",
   message: "現在の話題が会議の目的から逸脱している可能性があります",
-  suggested_agenda: [
+  suggestedTopics: [
     "認証方式の確認",
     "API方針の確認"
   ],
   recent_text: "会議室の予約について話し合っています",
-  timestamp: "2024-01-15T10:25:00Z"
+  created_at: "2024-01-15T10:25:00Z"
 };
 
 // サンプル会議サマリ

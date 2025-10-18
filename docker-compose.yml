@@ -1,0 +1,14 @@
+version: '3.9'
+
+services:
+  meeting-facilitation.app:
+    build: .
+    container_name: meeting-facilitation.app
+    volumes:
+      - ./infra:/app/infra
+      - ./.github:/app/.github
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ~/.aws:/root/.aws:rw
+    working_dir: "/app"
+    tty: true

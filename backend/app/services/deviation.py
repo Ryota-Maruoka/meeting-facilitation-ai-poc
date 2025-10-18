@@ -134,10 +134,10 @@ def _check_deviation_fallback(
     
     # 脱線判定
     is_deviation = best_similarity < threshold
-    
+
     # 推奨アジェンダ（類似度上位2つ）
-    suggested_agenda = [agenda for _, agenda in similarities[:2]]
-    
+    suggested_topics = [agenda for _, agenda in similarities[:2]]
+
     # メッセージ生成
     if is_deviation:
         message = f"直近{consecutive_chunks}回の発話がアジェンダ「{best_agenda}」との類似度が低い状態です（{best_similarity:.2f}）"
@@ -149,10 +149,10 @@ def _check_deviation_fallback(
     return {
         "is_deviation": is_deviation,
         "confidence": 1.0 - best_similarity,  # 脱線の確信度
-        "similarity_score": best_similarity,
+        "similarity": best_similarity,
         "best_agenda": best_agenda,
         "message": message,
-        "suggested_agenda": suggested_agenda,
+        "suggestedTopics": suggested_topics,
         "recent_text": recent_text,
         "reasoning": "従来のJaccard係数ベースの分析（フォールバック）",
         "timestamp": datetime.now(timezone.utc).isoformat()

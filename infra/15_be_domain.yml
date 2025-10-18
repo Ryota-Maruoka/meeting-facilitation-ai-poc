@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: bemac-meeting-dev-be-route53-stacks
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Parameters                                                                                    ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Parameters:
+  CustomerName:
+    Type: String
+    Default: bemac
+
+  ProjectName:
+    Type: String
+    Default: meeting
+
+  Environment:
+    Type: String
+    Default: dev
+
+  SystemName:
+    Type: String
+    Default: bemac-meeting-system
+
+  DomainName:
+    Type: String
+    Default: meeting.fr-bemac.com
+
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Resources                                                                                     ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Resources:
+  # ----------------------------------------------------------------------------- #
+  # Private Hosted Zone
+  # ----------------------------------------------------------------------------- #
+  PrivateHostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Sub ${DomainName}
+      HostedZoneConfig:
+        Comment: !Sub Private hosted zone for ${DomainName}
+      VPCs:
+        - VPCId: 
+            Fn::ImportValue: aicompass-demo-VpcId
+          VPCRegion: !Ref AWS::Region
+      HostedZoneTags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Outputs                                                                                       ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Outputs:
+  PrivateHostedZoneId:
+    Description: Private Hosted Zone ID
+    Value: !Ref PrivateHostedZone
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateHostedZoneId

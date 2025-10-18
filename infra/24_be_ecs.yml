@@ -1,0 +1,389 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: bemac-meeting-dev-be-ecs-stacks
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Capabilities                                                                                  ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "System Configuration"
+        Parameters:
+          - CustomerName
+          - ProjectName
+          - Environment
+          - SystemName
+    ParameterLabels:
+      CustomerName:
+        default: "Customer Name"
+      ProjectName:
+        default: "Project Name"
+      Environment:
+        default: "Environment"
+      SystemName:
+        default: "System Name"
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Parameters                                                                                    ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Parameters:
+  CustomerName:
+    Type: String
+    Default: bemac
+
+  ProjectName:
+    Type: String
+    Default: meeting
+
+  Environment:
+    Type: String
+    Default: dev
+
+  SystemName:
+    Type: String
+    Default: bemac-meeting-system
+
+  DomainName:
+    Type: String
+    Description: Public domain for CORS (e.g. app.example.com)
+
+  ContainerCpu:
+    Type: Number
+    Default: 1024
+
+  ContainerMemory:
+    Type: Number
+    Default: 2048
+
+  DesiredCount:
+    Type: Number
+    Default: 0
+
+  Port:
+    Type: Number
+    Default: 8000
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Resources                                                                                     ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Resources:
+  # ----------------------------------------------------------------------------- #
+  # ECS Cluster
+  # ----------------------------------------------------------------------------- #
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-cluster
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # Role
+  # ----------------------------------------------------------------------------- #
+  EcsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-ecs-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: SsmParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${CustomerName}/${ProjectName}/${Environment}/*
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${CustomerName}-${ProjectName}-${Environment}-*
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-*
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-ecs-task-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:*
+                  - logs:*
+                  - s3:*
+                Resource: '*'
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: [
+                  'arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0',
+                  'arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0',
+                  'arn:aws:bedrock:us-west-2::foundation-model/meta.llama3-70b-instruct-v1:0',
+                  'arn:aws:bedrock:us-west-2::foundation-model/meta.llama3-8b-instruct-v1:0',
+                ]
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-*'
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # ECS TaskDefinition
+  # ----------------------------------------------------------------------------- #
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-task-definition
+      Cpu: !Ref ContainerCpu
+      Memory: !Ref ContainerMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt EcsExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-container
+          Image: !Sub
+            - '${BeEcrRepositoryUri}:latest'
+            - BeEcrRepositoryUri:
+                Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-BeEcrRepositoryUri
+          Command:
+            - /bin/sh
+            - -c
+            - |
+              echo 'Starting Uvicorn server...' &&
+              uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+          PortMappings:
+            - HostPort: !Ref Port
+              ContainerPort: !Ref Port
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${CustomerName}-${ProjectName}-${Environment}-be-ecs
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          # 機密情報（統合シークレットから参照）
+          Secrets:
+            - Name: AZURE_OPENAI_API_KEY
+              ValueFrom: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-app-secrets:AZURE_OPENAI_API_KEY::'
+            - Name: DATABASE_URL
+              ValueFrom: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-app-secrets:DATABASE_URL::'
+            - Name: AWS_ACCESS_KEY_ID
+              ValueFrom: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-app-secrets:AWS_ACCESS_KEY_ID::'
+            - Name: AWS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CustomerName}-${ProjectName}-${Environment}-app-secrets:AWS_SECRET_ACCESS_KEY::'
+          # 非機密情報
+          Environment:
+            # アプリケーション基本設定
+            - Name: APP_NAME
+              Value: "accounting"
+            - Name: DEBUG
+              Value: "false"
+            - Name: LOG_LEVEL
+              Value: "INFO"
+            - Name: ENVIRONMENT
+              Value: "production"
+            - Name: PROJECT_NAME
+              Value: "経理生産性向上ツール"
+            # CORS設定
+            - Name: CORS_ORIGINS
+              Value: !Sub https://${DomainName}
+            - Name: AUTH_ENABLED
+              Value: "false"  # TODO: Redisを有効化してから true にする
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            # キャッシュ設定
+            - Name: CACHE_URL
+              Value: ""  # ElastiCache not used
+            - Name: CACHE__TTL
+              Value: "86400"
+            - Name: REDIS_ENABLED
+              Value: "false"
+            - Name: REDIS_URL
+              Value: ""  # ElastiCache not used
+            - Name: CELERY_BROKER_URL
+              Value: ""  # ElastiCache not used
+            - Name: CELERY_RESULT_BACKEND
+              Value: ""  # ElastiCache not used
+            # セキュリティとレート制限
+            - Name: RATE_LIMIT_ENABLED
+              Value: "true"
+            - Name: RATE_LIMIT_PER_MINUTE
+              Value: "60"
+            - Name: RATE_LIMIT_PER_HOUR
+              Value: "1000"
+            - Name: MAX_WEBSOCKET_CONNECTIONS_PER_IP
+              Value: "5"
+            # キャッシュTTL設定
+            - Name: CACHE_TTL_DEFAULT
+              Value: "300"
+            - Name: CACHE_TTL_FEEDBACK
+              Value: "3600"
+            - Name: CACHE_TTL_SUMMARY
+              Value: "86400"
+            # その他
+            - Name: AUDIO_ENABLED
+              Value: "true"
+            - Name: ENHANCED_AUTH_ENABLED
+              Value: "false"
+            - Name: SESSION_MANAGEMENT_ENABLED
+              Value: "false"
+            - Name: DATABASE_ECHO
+              Value: "false"
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # CloudWatch
+  # ----------------------------------------------------------------------------- #
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${CustomerName}-${ProjectName}-${Environment}-be-ecs
+      RetentionInDays: 14
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # ECS Service
+  # ----------------------------------------------------------------------------- #
+  BackendService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - BackendLogGroup
+    Properties:
+      ServiceName: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-service
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref BackendTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          SecurityGroups:
+            - Fn::ImportValue: aicompass-demo-EcsSecurityGroupId
+          Subnets:
+            - Fn::ImportValue: aicompass-demo-PrivateSubnet1Id
+            - Fn::ImportValue: aicompass-demo-PrivateSubnet2Id
+      LoadBalancers:
+        - ContainerName: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-container
+          ContainerPort: !Ref Port
+          TargetGroupArn:
+            Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-BeTargetGroupArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DeploymentController:
+        Type: ECS
+      Tags:
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Outputs                                                                                       ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Outputs:
+  ClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-BeEcsClusterName
+
+  BackendTaskDefinitionArn:
+    Description: Backend Task Definition ARN
+    Value: !Ref BackendTaskDefinition
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-BeTaskDefinitionArn
+
+  EcsExecutionRoleArn:
+    Description: ECS Execution Role ARN
+    Value: !GetAtt EcsExecutionRole.Arn
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-BeEcsExecutionRoleArn

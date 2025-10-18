@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 
@@ -14,6 +15,7 @@ from ..services.llm import (
     render_final_markdown,
 )
 from ..services.deviation import check_deviation, check_realtime_deviation
+from ..meeting_summarizer.service import summarize_meeting
 from ..settings import settings
 
 logger = logging.getLogger(__name__)
@@ -178,4 +180,89 @@ def final_summary(meeting_id: str) -> dict:
     # Persist for download/export
     store.save_file(meeting_id, "summary.md", md)
     return {"markdown": md, "slack_text": slack_text}
+
+
+@router.get("/summary")
+def get_summary(meeting_id: str) -> dict:
+    """会議要約を取得する。
+
+    Args:
+        meeting_id: 会議ID
+
+    Returns:
+        要約データ
+
+    Raises:
+        HTTPException: 会議が見つからない場合、要約データがない場合
+    """
+    meeting = store.load_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+
+    # 要約データを読み込む
+    summary = store.load_summary(meeting_id)
+    if not summary:
+        raise HTTPException(404, "Summary not found")
+
+    return summary
+
+
+@router.post("/summary/generate")
+def generate_meeting_summary(meeting_id: str) -> dict:
+    """会議要約を生成する。
+
+    全ての文字起こしテキストを要約APIに送信し、要約を生成する。
+    生成された要約はsummary.jsonに保存される。
+
+    Args:
+        meeting_id: 会議ID
+
+    Returns:
+        生成された要約データ
+
+    Raises:
+        HTTPException: 会議が見つからない場合、文字起こしデータがない場合
+    """
+    try:
+        meeting = store.load_meeting(meeting_id)
+        if not meeting:
+            raise HTTPException(404, "Meeting not found")
+
+        # 文字起こしデータを読み込む
+        transcripts = store.load_transcripts(meeting_id)
+        if not transcripts:
+            raise HTTPException(400, "No transcripts found for this meeting")
+
+        # 全ての文字起こしテキストを結合
+        all_text = "\n".join([t.get("text", "") for t in transcripts])
+
+        if not all_text.strip():
+            raise HTTPException(400, "Transcript text is empty")
+
+        logger.info("Generating summary for meeting %s", meeting_id)
+
+        # 要約を生成
+        summary_result = summarize_meeting(all_text, verbose=True)
+
+        # 要約データを作成
+        summary_data = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "summary": summary_result.summary,
+            "decisions": summary_result.decisions,
+            "undecided": summary_result.undecided,
+            "actions": [action.model_dump() for action in summary_result.actions],
+        }
+
+        # 要約データを保存
+        store.save_summary(meeting_id, summary_data)
+
+        logger.info("Summary generated and saved for meeting %s", meeting_id)
+
+        return summary_data
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Summary generation failed for meeting %s: %s", meeting_id, e, exc_info=True)
+        raise HTTPException(500, f"Summary generation failed: {str(e)}")
 

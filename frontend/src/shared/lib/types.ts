@@ -92,12 +92,12 @@ export type DeviationAlert = {
   id?: string;
   is_deviation: boolean;
   confidence: number;
-  similarity_score: number;
+  similarity: number; // similarity_score から similarity に変更
   best_agenda: string;
   message: string;
-  suggested_agenda: string[];
+  suggestedTopics: string[]; // suggested_agenda から suggestedTopics に変更
   recent_text: string;
-  timestamp: string;
+  created_at: string; // timestamp から created_at に変更
 };
 
 // 会議後サマリ

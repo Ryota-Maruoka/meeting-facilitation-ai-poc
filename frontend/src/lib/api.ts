@@ -1,20 +1,10 @@
 /**
  * API クライアント
- * 
+ *
  * バックエンドAPIとの通信を担当するクライアント
  */
 
 import { API_BASE_URL, ERROR_MESSAGES } from "./constants";
-import { 
-  mockMeetings, 
-  mockTranscripts, 
-  mockDecisions, 
-  mockActions, 
-  mockParkingLot, 
-  mockMiniSummary, 
-  mockDeviationAlert, 
-  mockMeetingSummary 
-} from "./mockData";
 import type {
   Meeting,
   MeetingCreate,
@@ -182,13 +172,7 @@ class ApiClient {
 
   // アジェンダ管理
   async getAgendaItems(meetingId: string): Promise<AgendaItem[]> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const meeting = mockMeetings.find(m => m.id === meetingId);
-        resolve(meeting?.agenda || []);
-      }, 300);
-    });
+    return this.request<AgendaItem[]>(`/meetings/${meetingId}/agenda`);
   }
 
   async createAgendaItem(meetingId: string, data: AgendaItemCreate): Promise<AgendaItem> {
@@ -213,12 +197,7 @@ class ApiClient {
 
   // 文字起こし
   async getTranscripts(meetingId: string): Promise<Transcript[]> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(mockTranscripts);
-      }, 200);
-    });
+    return this.request<Transcript[]>(`/meetings/${meetingId}/transcripts`);
   }
 
   async addTranscript(meetingId: string, data: Omit<Transcript, "id">): Promise<Transcript> {
@@ -247,9 +226,8 @@ class ApiClient {
 
   // 要約・分析
   async generateMiniSummary(meetingId: string): Promise<MiniSummary> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockMiniSummary), 400);
+    return this.request<MiniSummary>(`/meetings/${meetingId}/summary/mini`, {
+      method: "POST",
     });
   }
 
@@ -267,10 +245,7 @@ class ApiClient {
 
   // 決定・アクション
   async getDecisions(meetingId: string): Promise<Decision[]> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockDecisions), 300);
-    });
+    return this.request<Decision[]>(`/meetings/${meetingId}/decisions`);
   }
 
   async createDecision(meetingId: string, data: DecisionCreate): Promise<Decision> {
@@ -281,10 +256,7 @@ class ApiClient {
   }
 
   async getActions(meetingId: string): Promise<Action[]> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockActions), 300);
-    });
+    return this.request<Action[]>(`/meetings/${meetingId}/actions`);
   }
 
   async createAction(meetingId: string, data: ActionCreate): Promise<Action> {
@@ -296,10 +268,7 @@ class ApiClient {
 
   // Parking Lot
   async getParkingLot(meetingId: string): Promise<ParkingLotItem[]> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockParkingLot), 300);
-    });
+    return this.request<ParkingLotItem[]>(`/meetings/${meetingId}/parking`);
   }
 
   async createParkingLotItem(meetingId: string, data: ParkingLotItemCreate): Promise<ParkingLotItem> {
@@ -311,9 +280,8 @@ class ApiClient {
 
   // サマリ・連携
   async generateFinalSummary(meetingId: string): Promise<MeetingSummary> {
-    // モックデータを使用（開発中）
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(mockMeetingSummary), 500);
+    return this.request<MeetingSummary>(`/meetings/${meetingId}/summary/final`, {
+      method: "POST",
     });
   }
 
@@ -321,6 +289,34 @@ class ApiClient {
     return this.request<void>("/slack/send", {
       method: "POST",
       body: JSON.stringify({ meetingId, webhookUrl }),
+    });
+  }
+
+  // 会議開始・終了
+  async startMeeting(meetingId: string): Promise<Meeting> {
+    const data = await this.request<Record<string, unknown>>(`/meetings/${meetingId}/start`, {
+      method: "POST",
+    });
+    return this.mapBackendMeetingToFrontend(data);
+  }
+
+  async endMeeting(meetingId: string): Promise<Meeting> {
+    const data = await this.request<Record<string, unknown>>(`/meetings/${meetingId}/end`, {
+      method: "POST",
+    });
+    return this.mapBackendMeetingToFrontend(data);
+  }
+
+  // 要約取得・生成
+  async getSummary(meetingId: string): Promise<any> {
+    return this.request<any>(`/meetings/${meetingId}/summary`, {
+      method: "GET",
+    });
+  }
+
+  async generateSummary(meetingId: string): Promise<any> {
+    return this.request<any>(`/meetings/${meetingId}/summary/generate`, {
+      method: "POST",
     });
   }
 }

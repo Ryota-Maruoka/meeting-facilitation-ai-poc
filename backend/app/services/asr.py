@@ -64,9 +64,11 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
                 wav_path
             ]
             
-            logger.info(f"ffmpeg変換開始: {' '.join(cmd)}")
-            logger.info(f"WebMデータサイズ: {len(webm_data)} bytes")
-            
+            logger.info(f">>> ffmpeg変換開始: {' '.join(cmd)}")
+            logger.info(f">>> WebMデータサイズ: {len(webm_data)} bytes")
+            logger.info(f">>> WebMファイルパス: {webm_path}")
+            logger.info(f">>> WAV出力パス: {wav_path}")
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -74,12 +76,15 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
                 timeout=30,  # 30秒タイムアウト
                 check=True
             )
-            
+
+            logger.info(f">>> ffmpeg stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
+            logger.info(f">>> ffmpeg stderr: {result.stderr[:500] if result.stderr else '(empty)'}")
+
             # WAVファイルを読み込み
             with open(wav_path, 'rb') as f:
                 wav_data = f.read()
-            
-            logger.info(f"ffmpeg変換完了: WebM -> WAV (16kHz mono, {len(wav_data)} bytes)")
+
+            logger.info(f">>> ffmpeg変換完了: WebM -> WAV (16kHz mono, {len(wav_data)} bytes)")
             return wav_data
             
         except subprocess.CalledProcessError as e:
@@ -300,6 +305,109 @@ def parse_whisper_result(result: Dict[str, Any]) -> List[Dict]:
     return chunks
 
 
+# グローバル変数でWhisperモデルをキャッシュ
+_whisper_model = None
+_whisper_model_lock = None
+
+def _get_whisper_model():
+    """Whisperモデルを取得（初回のみロード、以降はキャッシュを使用）"""
+    global _whisper_model
+
+    if _whisper_model is None:
+        import whisper
+        print(">>> Whisperモデルを初回ロード中...")
+        _whisper_model = whisper.load_model("tiny")
+        print(">>> Whisperモデルのロード完了")
+
+    return _whisper_model
+
+
+async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]:
+    """
+    Python版Whisperを使用した音声認識
+
+    Args:
+        audio_file_path: 音声ファイルのパス
+
+    Returns:
+        文字起こし結果
+    """
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+
+        print(">>> Python版Whisperで文字起こし中...")
+        logger.info(">>> Python版Whisperで文字起こし中...")
+
+        import torch
+        import numpy as np
+        import wave
+
+        # キャッシュされたモデルを取得
+        model = _get_whisper_model()
+
+        # WAVファイルを直接NumPy配列として読み込み（ffmpegを使わない）
+        with wave.open(audio_file_path, 'rb') as wav_file:
+            # WAVファイルのパラメータを取得
+            sample_rate = wav_file.getframerate()
+            n_frames = wav_file.getnframes()
+            audio_data = wav_file.readframes(n_frames)
+
+            # バイトデータをNumPy配列に変換
+            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+
+            print(f">>> 音声データ読み込み完了: {len(audio_np)} samples, {sample_rate}Hz")
+
+        # 音声ファイルを文字起こし
+        print(f">>> Whisper実行開始（音声長: {len(audio_np)/16000:.2f}秒）")
+        try:
+            result = model.transcribe(
+                audio_np,  # NumPy配列を直接渡す
+                language="ja",  # 日本語
+                fp16=False,  # Windows CPU環境ではfp16を無効化
+                verbose=False,  # 詳細ログを抑制
+            )
+            print(">>> Whisper実行完了")
+        except Exception as e:
+            print(f">>> Whisper実行中にエラー: {e}")
+            raise
+
+        text = result["text"].strip()
+
+        print(f">>> Whisper文字起こし結果: {text[:200] if text else '(empty)'}")
+        logger.info(f">>> Whisper文字起こし結果: {text[:200] if text else '(empty)'}")
+
+        # メモリを解放
+        import gc
+        del audio_np
+        del result
+        gc.collect()
+
+        # PyTorchのキャッシュもクリア
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        print(">>> メモリ解放完了")
+
+        return {
+            "text": text,
+            "confidence": 0.95,
+            "language": "ja"
+        }
+
+    except ImportError as e:
+        print(f">>> ImportError: {e}")
+        logger.error("Python版Whisperがインストールされていません。pip install openai-whisper を実行してください")
+        raise RuntimeError("openai-whisper is not installed. Run: pip install openai-whisper")
+    except Exception as e:
+        print(f">>> Python版Whisper文字起こしエラー: {e}")
+        print(f">>> エラー詳細: {type(e).__name__}")
+        import traceback
+        print(traceback.format_exc())
+        logger.error(f"Python版Whisper文字起こしエラー: {e}", exc_info=True)
+        raise
+
+
 async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
     """
     音声ファイルを文字起こしする（Whisper.cpp使用）
@@ -325,6 +433,52 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 "confidence": 0.95,
                 "language": "ja"
             }
+
+        # Python版Whisperを使用する場合
+        if settings.asr_provider == "whisper_python":
+            logger.info("Python版Whisperを使用して文字起こしを実行")
+
+            # WebMファイルの場合は先にWAVに変換
+            processed_audio_path = audio_file_path
+            temp_wav_path = None
+
+            try:
+                if audio_file_path.lower().endswith('.webm'):
+                    print(">>> WebMファイルをWAVに変換してからWhisperに渡します")
+                    with open(audio_file_path, 'rb') as f:
+                        webm_data = f.read()
+
+                    wav_data = convert_webm_to_wav(webm_data)
+
+                    # 一時WAVファイルとして保存
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+                        temp_wav.write(wav_data)
+                        temp_wav_path = temp_wav.name
+                        processed_audio_path = temp_wav_path
+
+                    print(f">>> WAV変換完了: {processed_audio_path}")
+
+                result = await transcribe_with_python_whisper(processed_audio_path)
+
+                # 一時ファイルをクリーンアップ
+                if temp_wav_path and os.path.exists(temp_wav_path):
+                    try:
+                        os.unlink(temp_wav_path)
+                        print(f">>> 一時WAVファイルを削除: {temp_wav_path}")
+                    except Exception as e:
+                        logger.warning(f"一時ファイル削除エラー: {e}")
+
+                return result
+
+            except Exception as e:
+                # エラー時も一時ファイルをクリーンアップ
+                if temp_wav_path and os.path.exists(temp_wav_path):
+                    try:
+                        os.unlink(temp_wav_path)
+                    except:
+                        pass
+                raise
         
         # ファイルサイズをチェック
         file_size = os.path.getsize(audio_file_path)
@@ -342,22 +496,99 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         
         # WebMファイルの場合はWAVに変換
         if audio_file_path.lower().endswith('.webm'):
-            logger.info("WebMファイルを検出、WAVに変換中...")
+            print("=" * 80)
+            print(">>> WebMファイルを検出、WAVに変換中...")
+            logger.info(">>> WebMファイルを検出、WAVに変換中...")
             try:
                 with open(audio_file_path, 'rb') as f:
                     webm_data = f.read()
-                
+
+                print(f">>> WebMデータ読み込み: {len(webm_data)} bytes")
+                print(f">>> WebMヘッダ(最初の50バイト): {webm_data[:50].hex()}")
+                logger.info(f">>> WebMデータ読み込み: {len(webm_data)} bytes")
+                logger.info(f">>> WebMヘッダ(最初の50バイト): {webm_data[:50].hex()}")
+
                 wav_data = convert_webm_to_wav(webm_data)
-                
+
+                print(f">>> WAV変換完了: {len(wav_data)} bytes")
+                logger.info(f">>> WAV変換完了: {len(wav_data)} bytes")
+
+                # WAVファイルの音声レベルをチェック（無音検出）
+                if len(wav_data) < 1000:
+                    logger.warning(">>> WAVファイルが小さすぎます（おそらく無音）")
+                    return {
+                        "text": "",
+                        "confidence": 0.0,
+                        "language": "ja"
+                    }
+
                 # 変換されたWAVファイルを一時ファイルとして保存
                 with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
                     temp_wav.write(wav_data)
                     processed_audio_path = temp_wav.name
-                
-                logger.info(f"WebM変換完了: {processed_audio_path}")
-                
+
+                logger.info(f">>> WebM→WAV変換完了: {processed_audio_path}")
+
+                # WAVファイルの音量レベルをチェック（簡易的な無音検出）
+                # WAVヘッダーは通常44バイト、その後がPCMデータ
+                logger.info(f">>> WAVヘッダ(最初の50バイト): {wav_data[:50].hex()}")
+
+                if len(wav_data) > 44:
+                    pcm_data = wav_data[44:]  # ヘッダーをスキップ
+                    logger.info(f">>> PCMデータサイズ: {len(pcm_data)} bytes")
+
+                    # 16-bit PCMデータの絶対値の平均を計算（簡易的なRMS）
+                    import struct
+                    samples = []
+                    max_sample = 0
+                    min_sample = 0
+
+                    # より多くのサンプルをチェック（最初の10000サンプル = 20000バイト）
+                    sample_count = min(len(pcm_data) // 2, 10000)
+                    logger.info(f">>> チェックするサンプル数: {sample_count}")
+
+                    for i in range(0, sample_count * 2, 2):
+                        if i + 1 < len(pcm_data):
+                            try:
+                                sample = struct.unpack('<h', pcm_data[i:i+2])[0]  # little-endian 16-bit signed
+                                samples.append(abs(sample))
+                                max_sample = max(max_sample, sample)
+                                min_sample = min(min_sample, sample)
+                            except struct.error:
+                                logger.warning(f">>> サンプル読み込みエラー at index {i}")
+                                break
+
+                    if samples:
+                        avg_amplitude = sum(samples) / len(samples)
+                        print(f">>> 音声統計:")
+                        print(f"    - サンプル数: {len(samples)}")
+                        print(f"    - 平均振幅: {avg_amplitude:.2f} / 32768 ({avg_amplitude/32768*100:.2f}%)")
+                        print(f"    - 最大値: {max_sample}")
+                        print(f"    - 最小値: {min_sample}")
+                        print(f"    - ピーク振幅: {max(abs(max_sample), abs(min_sample))}")
+
+                        logger.info(f">>> 音声統計:")
+                        logger.info(f"    - サンプル数: {len(samples)}")
+                        logger.info(f"    - 平均振幅: {avg_amplitude:.2f} / 32768 ({avg_amplitude/32768*100:.2f}%)")
+                        logger.info(f"    - 最大値: {max_sample}")
+                        logger.info(f"    - 最小値: {min_sample}")
+                        logger.info(f"    - ピーク振幅: {max(abs(max_sample), abs(min_sample))}")
+
+                        # 振幅の情報をログに記録（閾値チェックは削除、常にWhisperに渡す）
+                        if avg_amplitude < 10:
+                            print(f">>> 音声レベルが極めて低い: {avg_amplitude:.2f}")
+                            logger.warning(f">>> 音声レベルが極めて低い: {avg_amplitude:.2f}")
+                        elif avg_amplitude < 50:
+                            print(f">>> 音声レベルが低い: {avg_amplitude:.2f} (Whisperで処理を試みます)")
+                            logger.info(f">>> 音声レベルが低い: {avg_amplitude:.2f} (Whisperで処理を試みます)")
+                        else:
+                            print(f">>> 音声レベルOK: {avg_amplitude:.2f}")
+                            logger.info(f">>> 音声レベルOK: {avg_amplitude:.2f}")
+                    else:
+                        logger.warning(">>> サンプルが取得できませんでした")
+
             except Exception as e:
-                logger.error(f"WebM変換エラー: {e}")
+                logger.error(f">>> WebM変換エラー: {e}", exc_info=True)
                 return {
                     "text": f"[エラー] 音声ファイルの変換に失敗しました: {str(e)}",
                     "confidence": 0.0,
@@ -367,19 +598,23 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         # Whisper.cppの実行ファイルを検索
         whisper_exe = find_whisper_executable()
         if not whisper_exe:
+            print(">>> エラー: Whisper.cppの実行ファイルが見つかりません")
             logger.error("Whisper.cppの実行ファイルが見つかりません")
             raise FileNotFoundError("Whisper.cpp executable not found")
-        
+
+        print(f">>> Whisper.cpp実行ファイル: {whisper_exe}")
         logger.info(f"Whisper.cpp実行ファイル: {whisper_exe}")
-        
+
         # 設定からモデルパスを取得
         from ..settings import settings
         model_path = settings.whisper_model_path
-        
+
         if not os.path.exists(model_path):
+            print(f">>> エラー: モデルファイルが見つかりません: {model_path}")
             logger.error(f"モデルファイルが見つかりません: {model_path}")
             raise FileNotFoundError(f"Model file not found: {model_path}")
-        
+
+        print(f">>> モデルファイル: {model_path}")
         logger.info(f"モデルファイル: {model_path}")
         
         # Whisper.cppを実行（標準出力/標準エラー出力から直接取得）
@@ -391,9 +626,11 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
             "-t", "8",  # スレッド数（0を避けるため明示的に8に設定）
         ]
         
+        print(f">>> Whisper.cppコマンド: {' '.join(cmd)}")
+        print(">>> Whisper.cpp実行中... (最大5分待機)")
         logger.info(f"Whisper.cppコマンド: {' '.join(cmd)}")
         logger.info("Whisper.cpp実行中... (最大5分待機)")
-        
+
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -403,7 +640,10 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
             timeout=300,  # 300秒（5分）タイムアウト（30秒音声の処理に十分な時間）
             cwd=os.path.dirname(os.path.abspath(whisper_exe))
         )
-        
+
+        print(f">>> Whisper.cpp実行完了 (returncode={result.returncode})")
+        print(f">>> Whisper.cpp raw stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
+        print(f">>> Whisper.cpp raw stderr: {result.stderr[:500] if result.stderr else '(empty)'}")
         logger.info(f"Whisper.cpp実行完了 (returncode={result.returncode})")
         logger.info(f"Whisper.cpp raw stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
         logger.info(f"Whisper.cpp raw stderr: {result.stderr[:500] if result.stderr else '(empty)'}")
@@ -413,30 +653,38 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         
         # stderrから文字起こし結果を抽出（Whisper.cppは通常stderrに出力する）
         text = ""
-        
+
         if result.stderr:
             # stderrから文字起こし結果を抽出
             # Whisper.cppは以下の形式で出力する：
             # [00:00:00.000 --> 00:00:05.000]  こんにちは、これはテストです。
             lines = result.stderr.split('\n')
-            for line in lines:
+            logger.info(f">>> Whisper.cpp stderr lines count: {len(lines)}")
+
+            for i, line in enumerate(lines):
                 # タイムスタンプ付きの文字起こし行を探す
                 if '-->' in line and ']' in line:
+                    logger.info(f">>> Found transcript line {i}: {line[:100]}")
                     # タイムスタンプの後のテキストを抽出
                     text_part = line.split(']', 1)[-1].strip()
                     if text_part and not text_part.startswith('['):
                         text += text_part + " "
-            
+
             text = text.strip()
-        
+
         # stderrにテキストがない場合はstdoutを確認
         if not text and result.stdout:
+            logger.info(">>> No text in stderr, checking stdout")
             text = result.stdout.strip()
-        
-        logger.info(f"抽出されたテキスト: {text[:200] if text else '(empty)'}")
-        
+
+        print(f">>> 抽出されたテキスト: {text[:200] if text else '(empty)'}")
+        print(f">>> テキスト長: {len(text)} characters")
+        logger.info(f">>> 抽出されたテキスト: {text[:200] if text else '(empty)'}")
+        logger.info(f">>> テキスト長: {len(text)} characters")
+
         # テキストが空の場合
         if not text:
+            print(">>> 文字起こし結果が空です（無音または認識不可）")
             logger.warning("文字起こし結果が空です（無音または認識不可）")
             return {
                 "text": "",  # 空の文字列を返す

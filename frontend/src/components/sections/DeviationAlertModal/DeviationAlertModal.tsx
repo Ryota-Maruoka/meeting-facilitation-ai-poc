@@ -93,7 +93,7 @@ const DeviationAlertModal: FC<DeviationAlertModalProps> = ({
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Typography variant="h6" color="error">
-              {(alert.similarity_score * 100).toFixed(1)}%
+              {(alert.similarity * 100).toFixed(1)}%
             </Typography>
             <Typography variant="body2" color="text.secondary">
               （しきい値: 30%）
@@ -122,17 +122,17 @@ const DeviationAlertModal: FC<DeviationAlertModalProps> = ({
         </Box>
 
         {/* 推奨アジェンダ */}
-        {alert.suggested_agenda.length > 0 && (
+        {alert.suggestedTopics.length > 0 && (
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
               推奨アジェンダ
             </Typography>
             <List dense>
-              {alert.suggested_agenda.map((agenda, index) => (
+              {alert.suggestedTopics.map((agenda, index) => (
                 <ListItem key={index} sx={{ py: 0.5 }}>
                   <ListItemText
                     primary={agenda}
-                    secondary={`類似度: ${(alert.similarity_score * 100).toFixed(1)}%`}
+                    secondary={`類似度: ${(alert.similarity * 100).toFixed(1)}%`}
                   />
                 </ListItem>
               ))}
@@ -152,11 +152,11 @@ const DeviationAlertModal: FC<DeviationAlertModalProps> = ({
 
       <DialogActions sx={{ p: 2, gap: 1 }}>
         {/* 軌道修正ボタン */}
-        {alert.suggested_agenda.length > 0 && (
+        {alert.suggestedTopics.length > 0 && (
           <Button
             variant="contained"
             color="primary"
-            onClick={() => handleReturnToAgenda(alert.suggested_agenda[0])}
+            onClick={() => handleReturnToAgenda(alert.suggestedTopics[0])}
             sx={{ minWidth: 120 }}
           >
             議題に戻す
