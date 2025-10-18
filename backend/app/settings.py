@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     azure_openai_api_key: str = ""
     azure_openai_api_version_responses: str = "2025-04-01"
     azure_openai_api_version_chat: str = "2024-12-01-preview"
-    azure_openai_deployment: str = "gpt-4o-mini"
+    azure_openai_deployment: str = "gpt-5-mini"
     default_timezone: str = "Asia/Tokyo"
 
 

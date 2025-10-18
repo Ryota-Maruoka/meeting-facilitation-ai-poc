@@ -119,7 +119,7 @@ D：会議サマリ	決定・未決・アクション・Parking Lot・ダウン�
 フロント	React（Next.js）＋Tailwind CSS＋Next UI
 バック	Python FastAPI
 ASR	OpenAI Whisper API or Whisper.cpp
-LLM要約	GPT-4o mini／claude 3.5 mini など
+LLM要約	gpt-5-mini など
 データ	JSONベースで簡易保存（POC段階）
 連携	Slack Incoming Webhook（オプション）
 ホスティング	Vercel or Render or Cloud Run（任意）

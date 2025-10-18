@@ -2,9 +2,11 @@ from typing import List, Tuple, Dict, Any
 from datetime import datetime, timezone
 import logging
 
+from .ai_deviation import ai_deviation_service
+
 logger = logging.getLogger(__name__)
 
-# 脱線検知のための類似度計算
+# 脱線検知のための類似度計算（従来の手法、フォールバック用）
 def similarity(a: str, b: str) -> float:
     """2つのテキストの類似度を計算（Jaccard係数ベース）"""
     a_words = set(w for w in a.lower().split() if len(w) > 1)
@@ -17,7 +19,7 @@ def similarity(a: str, b: str) -> float:
 
 
 def check_deviation(text: str, agenda_titles: List[str], threshold: float = 0.3) -> Tuple[float, str, List[str]]:
-    """単一テキストの脱線検知"""
+    """単一テキストの脱線検知（従来の手法）"""
     best = 0.0
     best_titles: List[str] = []
     for t in agenda_titles:
@@ -34,14 +36,61 @@ def check_deviation(text: str, agenda_titles: List[str], threshold: float = 0.3)
     return best, label, targets
 
 
-def check_realtime_deviation(
+async def check_realtime_deviation(
     recent_transcripts: List[Dict[str, Any]], 
     agenda_titles: List[str], 
     threshold: float = 0.3,
     consecutive_chunks: int = 3
 ) -> Dict[str, Any]:
     """
-    リアルタイム脱線検知
+    AIベースのリアルタイム脱線検知
+    
+    Args:
+        recent_transcripts: 直近の文字起こし結果のリスト
+        agenda_titles: アジェンダタイトルのリスト
+        threshold: 類似度のしきい値
+        consecutive_chunks: 連続して脱線と判定するチャンク数
+        
+    Returns:
+        脱線検知結果の辞書
+    """
+    try:
+        # AIベースの脱線検知を実行
+        analysis = await ai_deviation_service.check_deviation(
+            recent_transcripts=recent_transcripts,
+            agenda_titles=agenda_titles,
+            threshold=threshold,
+            consecutive_chunks=consecutive_chunks
+        )
+        
+        # DeviationAnalysisを辞書形式に変換
+        return {
+            "is_deviation": analysis.is_deviation,
+            "confidence": analysis.confidence,
+            "similarity_score": analysis.similarity_score,
+            "best_agenda": analysis.best_agenda,
+            "message": analysis.message,
+            "suggested_agenda": analysis.suggested_agenda,
+            "recent_text": analysis.recent_text,
+            "reasoning": analysis.reasoning,
+            "timestamp": analysis.timestamp
+        }
+        
+    except Exception as e:
+        logger.error(f"AI脱線検知エラー: {e}", exc_info=True)
+        
+        # フォールバック: 従来の手法を使用
+        return _check_deviation_fallback(recent_transcripts, agenda_titles, threshold, consecutive_chunks)
+
+
+def _check_deviation_fallback(
+    recent_transcripts: List[Dict[str, Any]], 
+    agenda_titles: List[str], 
+    threshold: float = 0.3,
+    consecutive_chunks: int = 3
+) -> Dict[str, Any]:
+    """
+    フォールバック用の従来手法による脱線検知
     
     Args:
         recent_transcripts: 直近の文字起こし結果のリスト
@@ -57,7 +106,8 @@ def check_realtime_deviation(
             "is_deviation": False,
             "confidence": 0.0,
             "message": "データ不足",
-            "suggestedTopics": []
+            "suggested_agenda": [],
+            "reasoning": "文字起こしデータが不足（フォールバック）"
         }
     
     # 直近の文字起こし結果を結合
@@ -68,7 +118,8 @@ def check_realtime_deviation(
             "is_deviation": False,
             "confidence": 0.0,
             "message": "テキストが空",
-            "suggestedTopics": []
+            "suggested_agenda": [],
+            "reasoning": "文字起こしテキストが空（フォールバック）"
         }
     
     # 各アジェンダとの類似度を計算
@@ -92,9 +143,9 @@ def check_realtime_deviation(
         message = f"直近{consecutive_chunks}回の発話がアジェンダ「{best_agenda}」との類似度が低い状態です（{best_similarity:.2f}）"
     else:
         message = f"アジェンダ「{best_agenda}」に沿った発話です（類似度: {best_similarity:.2f}）"
-
-    logger.info(f"脱線検知結果: is_deviation={is_deviation}, similarity={best_similarity:.2f}, agenda={best_agenda}")
-
+    
+    logger.info(f"フォールバック脱線検知結果: is_deviation={is_deviation}, similarity={best_similarity:.2f}, agenda={best_agenda}")
+    
     return {
         "is_deviation": is_deviation,
         "confidence": 1.0 - best_similarity,  # 脱線の確信度
@@ -103,5 +154,6 @@ def check_realtime_deviation(
         "message": message,
         "suggestedTopics": suggested_topics,
         "recent_text": recent_text,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "reasoning": "従来のJaccard係数ベースの分析（フォールバック）",
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
