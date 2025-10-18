@@ -32,8 +32,8 @@ class MeetingCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     purpose: str = Field(..., min_length=1)
     deliverable_template: str = Field(..., min_length=1)
+    meetingDate: str | None = Field(None, description="会議日程（YYYY-MM-DD形式）")
     participants: list[str] = Field(default_factory=list)
-    consent_recording: bool = False
     agenda: list[AgendaItem] = Field(default_factory=list)
 
 
@@ -51,8 +51,8 @@ class Meeting(BaseModel):
     title: str
     purpose: str
     deliverable_template: str
+    meetingDate: str | None = Field(None, description="会議日程（YYYY-MM-DD形式）")
     participants: list[str]
-    consent_recording: bool
     agenda: list[AgendaItem]
     status: str = "draft"
 

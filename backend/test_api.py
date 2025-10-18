@@ -28,8 +28,7 @@ def test_api_connection():
             "title": "テスト会議",
             "purpose": "テスト目的",
             "deliverable_template": "テスト成果物",
-            "participants": [],
-            "consent_recording": False
+            "participants": []
         }
         
         print(f"\n会議作成APIテスト...")

@@ -33,6 +33,8 @@ import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
+import { apiClient } from "@/lib/api";
+import type { Meeting } from "@/lib/types";
 
 export default function MeetingHistoryPage() {
   const router = useRouter();
@@ -42,9 +44,9 @@ export default function MeetingHistoryPage() {
   // -----------------------------
   type Status = "完了" | "下書き";
 
-  type Meeting = {
+  type DisplayMeeting = {
     id: string;
-    date: string; // YYYY-MM-DD
+    meetingDate: string; // YYYY-MM-DD
     title: string;
     participants: string;
     status: Status;
@@ -53,39 +55,36 @@ export default function MeetingHistoryPage() {
   // -----------------------------
   // 会議データ
   // -----------------------------
-  const [initialData, setInitialData] = useState<Meeting[]>([]);
+  const [initialData, setInitialData] = useState<DisplayMeeting[]>([]);
 
   // 会議データを取得
   useEffect(() => {
     async function fetchMeetings() {
       try {
-        const response = await fetch("/api/meetings");
+        const meetings = await apiClient.getMeetings();
 
-        if (response.ok) {
-          const meetings = await response.json();
+        // APIのデータ形式を画面表示用に変換
+        const formattedMeetings = meetings.map((m: Meeting): DisplayMeeting => {
+          // participantsが配列かどうか確認
+          const participantsStr = Array.isArray(m.participants)
+            ? m.participants.join("、")
+            : typeof m.participants === "string"
+            ? m.participants
+            : "";
 
-          // APIのデータ形式を画面表示用に変換
-          const formattedMeetings = meetings.map((m: any) => {
-            // participantsが配列かどうか確認
-            const participantsStr = Array.isArray(m.participants)
-              ? m.participants.join("、")
-              : typeof m.participants === "string"
-              ? m.participants
-              : "";
+          return {
+            id: m.id,
+            meetingDate: m.meetingDate || m.created_at || "", // meetingDateフィールドがなければcreated_atを使用、それもなければ空文字
+            title: m.title,
+            participants: participantsStr,
+            status: m.status === "completed" ? "完了" : "下書き", // APIのステータスを日本語に変換
+          };
+        });
 
-            return {
-              id: m.id,
-              date: m.date,
-              title: m.title,
-              participants: participantsStr,
-              status: m.status,
-            };
-          });
-
-          setInitialData(formattedMeetings);
-        }
+        setInitialData(formattedMeetings);
       } catch (error) {
         console.error("Failed to fetch meetings:", error);
+        showError("会議データの取得に失敗しました");
       }
     }
     fetchMeetings();
@@ -125,7 +124,7 @@ export default function MeetingHistoryPage() {
   const [pageSize, setPageSize] = useState<number>(10);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
-  const [deletingMeeting, setDeletingMeeting] = useState<Meeting | null>(null);
+  const [deletingMeeting, setDeletingMeeting] = useState<DisplayMeeting | null>(null);
 
   // トースト通知
   const { toasts, showSuccess, showError, removeToast } = useToast();
@@ -218,7 +217,7 @@ export default function MeetingHistoryPage() {
   const filtered = useMemo(() => {
     const kw = keyword.trim();
     const result = initialData.filter((row) => {
-      if (!inRange(row.date)) return false;
+      if (!inRange(row.meetingDate)) return false;
       if (statusFilter !== "すべてのステータス") {
         if (row.status !== statusFilter) return false;
       }
@@ -274,7 +273,7 @@ export default function MeetingHistoryPage() {
     router.push("/meetings/new");
   };
 
-  const handleTitleClick = (meeting: Meeting) => {
+  const handleTitleClick = (meeting: DisplayMeeting) => {
     if (meeting.status === "完了") {
       // 完了済みの会議はレポート画面へ
       router.push(`/meetings/${meeting.id}/summary`);
@@ -289,7 +288,7 @@ export default function MeetingHistoryPage() {
     setDropdownOpen(null);
   };
 
-  const handleDeleteClick = (meeting: Meeting) => {
+  const handleDeleteClick = (meeting: DisplayMeeting) => {
     setDeletingMeeting(meeting);
     setDeleteModalOpen(true);
   };
@@ -297,19 +296,13 @@ export default function MeetingHistoryPage() {
   const handleDeleteConfirm = async () => {
     if (deletingMeeting) {
       try {
-        // 個別のJSONファイルを削除
-        const response = await fetch(`/api/meetings/${deletingMeeting.id}`, {
-          method: "DELETE",
-        });
+        // バックエンドAPIで削除
+        await apiClient.deleteMeeting(deletingMeeting.id);
 
-        if (response.ok) {
-          // 画面上のデータも更新
-          setInitialData((prev) => prev.filter((m) => m.id !== deletingMeeting.id));
+        // 画面上のデータも更新
+        setInitialData((prev) => prev.filter((m) => m.id !== deletingMeeting.id));
 
-          showSuccess("会議を削除しました");
-        } else {
-          throw new Error("Delete failed");
-        }
+        showSuccess("会議を削除しました");
       } catch (error) {
         console.error("Failed to delete meeting:", error);
         showError("会議の削除に失敗しました");
@@ -559,7 +552,7 @@ export default function MeetingHistoryPage() {
               ) : (
                 pageRows.map((row) => (
                   <tr key={row.id}>
-                    <td>{formatDate(row.date)}</td>
+                    <td>{formatDate(row.meetingDate)}</td>
                     <td>
                       <a
                         className="title-link"
@@ -659,7 +652,7 @@ export default function MeetingHistoryPage() {
               </button>
               {Array.from({ length: Math.min(totalPages, 5) }).map((_, idx) => {
                 const pageNo = idx + 1;
-                return (
+  return (
                   <button
                     key={pageNo}
                     className={`page-link ${pageNo === currentPage ? "active" : ""}`}
@@ -681,8 +674,8 @@ export default function MeetingHistoryPage() {
             </div>
           </div>
         </div>
-        </div>
-      </div>
+            </div>
+          </div>
 
       {/* 削除確認モーダル */}
       {deleteModalOpen && (
@@ -701,9 +694,9 @@ export default function MeetingHistoryPage() {
               <button className="btn btn-danger" onClick={handleDeleteConfirm}>
                 削除
               </button>
-            </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* トースト通知 */}

@@ -10,8 +10,8 @@ export type Meeting = {
   title: string;
   purpose: string;
   expectedOutcome: string;
+  meetingDate?: string; // 会議日程（YYYY-MM-DD形式）
   participants: string[];
-  recordingConsent: boolean;
   status: "draft" | "active" | "completed";
   created_at: string;
   updated_at: string;

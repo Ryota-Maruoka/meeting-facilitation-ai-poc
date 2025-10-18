@@ -11,7 +11,6 @@ export type Meeting = {
   purpose: string;
   expectedOutcome: string;
   participants: string[];
-  recordingConsent: boolean;
   status: "draft" | "active" | "completed";
   created_at: string;
   updated_at: string;

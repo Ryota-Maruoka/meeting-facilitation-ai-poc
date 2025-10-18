@@ -90,10 +90,6 @@ def create_meeting(payload: MeetingCreate) -> Meeting:
         ValidationError: ビジネスルール違反（参加者数上限等）
         InfrastructureError: データストアエラー
     """
-    if not payload.consent_recording:
-        # For PoC: allow meeting creation but mark consent false
-        logger.warning("Meeting created without recording consent")
-
     meeting_id = str(uuid4())
     now = datetime.now(timezone.utc)
 
@@ -104,8 +100,8 @@ def create_meeting(payload: MeetingCreate) -> Meeting:
         "title": payload.title,
         "purpose": payload.purpose,
         "deliverable_template": payload.deliverable_template,
+        "meetingDate": payload.meetingDate,
         "participants": payload.participants,
-        "consent_recording": payload.consent_recording,
         "agenda": [item.model_dump() for item in payload.agenda],
         "status": "draft",
     }
@@ -169,10 +165,10 @@ def update_meeting(meeting_id: str, payload: dict) -> Meeting:
         meeting["purpose"] = payload["purpose"]
     if "deliverable_template" in payload:
         meeting["deliverable_template"] = payload["deliverable_template"]
+    if "meetingDate" in payload:
+        meeting["meetingDate"] = payload["meetingDate"]
     if "participants" in payload:
         meeting["participants"] = payload["participants"]
-    if "consent_recording" in payload:
-        meeting["consent_recording"] = payload["consent_recording"]
     if "agenda" in payload:
         meeting["agenda"] = payload["agenda"]
 

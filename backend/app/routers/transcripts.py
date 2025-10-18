@@ -87,11 +87,6 @@ async def transcribe_audio_upload(
             logger.error("Meeting not found: %s", meeting_id)
             raise HTTPException(404, "Meeting not found")
 
-        # 録音同意の確認（一時的に無効化）
-        # if not meeting.get("consent_recording", False):
-        #     logger.error("Recording consent not granted for meeting %s", meeting_id)
-        #     raise HTTPException(403, "Recording consent not granted for this meeting")
-
         # ファイルの詳細ログ
         logger.info(
             "Audio file: %s, content_type: %s, size: %s",
