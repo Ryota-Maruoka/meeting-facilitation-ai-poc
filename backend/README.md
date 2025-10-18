@@ -49,7 +49,7 @@ cp env.example .env
 # Azure OpenAI設定（会議要約機能用）
 AZURE_OPENAI_ENDPOINT=https://your-resource.cognitiveservices.azure.com
 AZURE_OPENAI_API_KEY=your-api-key-here
-AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
 
 # その他の設定
 DATA_DIR=./data

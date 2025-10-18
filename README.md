@@ -347,7 +347,7 @@ python test_whisper.py
 ### AI/ML
 - **Whisper.cpp** - 音声文字起こし（ローカル実行、無料）
 - **OpenAI Whisper API** - 音声文字起こし（クラウド、有料）
-- **GPT-4o mini** - 要約・提案生成（予定）
+- **GPT-5-mini** - 要約・提案生成（予定）
 
 ## API エンドポイント
 
