@@ -908,6 +908,37 @@ export const commonStyles = `
     border-left: 3px solid #ff9800;
   }
 
+  .parking-item-content {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .parking-item-title {
+    font-weight: 500;
+    color: #333;
+  }
+
+  .parking-item-actions {
+    display: flex;
+    align-items: center;
+  }
+
+  .parking-item-checkbox {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 2px;
+    transition: background-color 0.2s;
+  }
+
+  .parking-item-checkbox:hover {
+    background: rgba(0,0,0,0.05);
+  }
+
   .empty-state {
     text-align: center;
     color: #9e9e9e;

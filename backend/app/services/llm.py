@@ -79,7 +79,7 @@ def render_final_markdown(meeting: dict) -> Tuple[str, str]:
     md_lines.append("")
     md_lines.append("## Parking Lot")
     for p in parking:
-        md_lines.append(f"- {p.get('title')} {'[次回アジェンダ追加]' if p.get('add_to_next_agenda') else ''}")
+        md_lines.append(f"- {p.get('title')}")
 
     md = "\n".join(md_lines)
 

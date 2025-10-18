@@ -219,8 +219,39 @@ class ApiClient {
   }
 
   async checkDeviation(meetingId: string): Promise<DeviationAlert> {
-    return this.request<DeviationAlert>(`/meetings/${meetingId}/deviation/check`, {
+    const backendResponse = await this.request<Record<string, unknown>>(`/meetings/${meetingId}/deviation/check`, {
       method: "POST",
+    });
+    
+    // バックエンドレスポンスをフロントエンド型にマッピング
+    return {
+      id: String(backendResponse.id ?? Date.now().toString()),
+      is_deviation: Boolean(backendResponse.is_deviation),
+      confidence: Number(backendResponse.confidence ?? 0),
+      similarity: Number(backendResponse.similarity_score ?? 0),
+      best_agenda: String(backendResponse.best_agenda ?? ""),
+      message: String(backendResponse.message ?? ""),
+      suggestedTopics: Array.isArray(backendResponse.suggested_agenda) 
+        ? backendResponse.suggested_agenda as string[]
+        : [],
+      recent_text: String(backendResponse.recent_text ?? ""),
+      created_at: String(backendResponse.timestamp ?? new Date().toISOString()),
+    };
+  }
+
+  // 保留事項（Parking Lot）関連
+  async addParkingItem(meetingId: string, title: string): Promise<void> {
+    await this.request(`/meetings/${meetingId}/parking`, {
+      method: "POST",
+      body: JSON.stringify({
+        title,
+      }),
+    });
+  }
+
+  async getParkingItems(meetingId: string): Promise<Array<{ title: string }>> {
+    return this.request(`/meetings/${meetingId}/parking`, {
+      method: "GET",
     });
   }
 

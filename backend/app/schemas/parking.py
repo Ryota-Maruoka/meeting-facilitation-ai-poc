@@ -8,5 +8,4 @@ class ParkingItem(BaseModel):
     """Parking Lotアイテム"""
 
     title: str
-    add_to_next_agenda: bool = False
 
