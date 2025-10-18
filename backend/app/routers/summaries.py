@@ -96,8 +96,8 @@ def api_generate_proposals(meeting_id: str) -> dict:
 
 
 @router.post("/deviation/check")
-def check_meeting_deviation(meeting_id: str) -> dict:
-    """会議の脱線検知を実行する。
+async def check_meeting_deviation(meeting_id: str) -> dict:
+    """会議の脱線検知を実行する（AIベース）。
 
     Args:
         meeting_id: 会議ID
@@ -126,6 +126,7 @@ def check_meeting_deviation(meeting_id: str) -> dict:
                 "confidence": 0.0,
                 "message": "アジェンダが設定されていません",
                 "suggested_agenda": [],
+                "reasoning": "アジェンダが設定されていないため脱線検知をスキップ"
             }
 
         # 直近の文字起こし結果を取得
@@ -136,23 +137,24 @@ def check_meeting_deviation(meeting_id: str) -> dict:
                 "confidence": 0.0,
                 "message": "文字起こしデータがありません",
                 "suggested_agenda": [],
+                "reasoning": "文字起こしデータがないため脱線検知をスキップ"
             }
 
-        # 脱線検知を実行
-        deviation_result = check_realtime_deviation(
+        # AIベースの脱線検知を実行
+        deviation_result = await check_realtime_deviation(
             recent_transcripts=transcripts,
             agenda_titles=agenda_titles,
             threshold=0.3,
             consecutive_chunks=3,
         )
 
-        logger.info("脱線検知完了 for meeting %s: %s", meeting_id, deviation_result)
+        logger.info("AI脱線検知完了 for meeting %s: %s", meeting_id, deviation_result)
         return deviation_result
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("脱線検知エラー for meeting %s: %s", meeting_id, e, exc_info=True)
+        logger.error("AI脱線検知エラー for meeting %s: %s", meeting_id, e, exc_info=True)
         raise HTTPException(500, f"脱線検知に失敗しました: {str(e)}")
 
 
