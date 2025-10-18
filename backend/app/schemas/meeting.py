@@ -42,7 +42,7 @@ class Meeting(BaseModel):
 
     model_config = ConfigDict(
         from_attributes=True,
-        extra="forbid",
+        extra="ignore",
     )
 
     id: str

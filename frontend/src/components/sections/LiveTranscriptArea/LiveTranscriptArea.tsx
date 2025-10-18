@@ -165,9 +165,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   // 録音開始
   const startRecording = useCallback(async () => {
     try {
-      setError(null);
-      // 録音開始時は文字起こし結果をクリアしない（既存の結果を保持）
-      
+      setError(null);      
       // マイクアクセスを要求
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {

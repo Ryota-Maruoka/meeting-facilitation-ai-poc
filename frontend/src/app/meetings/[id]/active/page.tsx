@@ -78,6 +78,7 @@ export default function MeetingActivePage() {
   const [parkingLot, setParkingLot] = useState<string[]>([]);
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
+  const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
@@ -182,39 +183,50 @@ export default function MeetingActivePage() {
   };
 
   const handleEndMeetingConfirm = async () => {
-    // 会議終了時に会議レポート用のデータを保存
-    if (meetingData) {
-      // 経過時間を計算（分単位）
-      const durationMinutes = Math.floor(elapsedSeconds / 60);
+    setIsEndingMeeting(true);
+    try {
+      // 会議終了時に会議レポート用のデータを保存
+      if (meetingData) {
+        // 経過時間を計算（分単位）
+        const durationMinutes = Math.floor(elapsedSeconds / 60);
 
-      const meetingSummaryData = {
-        title: meetingData.title,
-        date: meetingData.meetingDate || new Date().toISOString().split('T')[0],
-        participants: meetingData.participants.join("、"),
-        duration: `${durationMinutes}分`,
-        startTime: formatStartTime(startTime),
-      };
+        const meetingSummaryData = {
+          title: meetingData.title,
+          date: meetingData.meetingDate || new Date().toISOString().split('T')[0],
+          participants: meetingData.participants.join("、"),
+          duration: `${durationMinutes}分`,
+          startTime: formatStartTime(startTime),
+        };
 
-      sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
+        sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
 
-      // APIで会議ステータスを更新
-      try {
-        await apiClient.updateMeeting(meetingId, {
-          status: "completed",
-          started_at: startTime.toISOString(),
-          ended_at: new Date().toISOString(),
-        });
+        // APIで会議ステータスを更新
+        try {
+          await apiClient.updateMeeting(meetingId, {
+            status: "completed",
+            started_at: startTime.toISOString(),
+            ended_at: new Date().toISOString(),
+          });
 
-        console.log("Meeting status updated to completed");
-      } catch (error) {
-        console.error("Failed to update meeting status:", error);
-        showSuccess("会議は終了しましたが、ステータスの更新に失敗しました");
+          console.log("Meeting status updated to completed");
+          showSuccess("会議が正常に終了しました");
+        } catch (error) {
+          console.error("Failed to update meeting status:", error);
+          showSuccess("会議は終了しましたが、ステータスの更新に失敗しました");
+        }
       }
-    }
 
-    console.log("会議終了:", meetingId);
-    setEndModalOpen(false);
-    router.push(`/meetings/${meetingId}/summary`);
+      console.log("会議終了:", meetingId);
+      setEndModalOpen(false);
+      router.push(`/meetings/${meetingId}/summary`);
+    } catch (error) {
+      console.error("会議終了処理でエラーが発生しました:", error);
+      showSuccess("会議終了処理中にエラーが発生しました。レポート画面に移動します。");
+      setEndModalOpen(false);
+      router.push(`/meetings/${meetingId}/summary`);
+    } finally {
+      setIsEndingMeeting(false);
+    }
   };
 
   const handleEndModalClose = () => {
@@ -515,8 +527,12 @@ export default function MeetingActivePage() {
               <button className="btn" onClick={handleEndModalClose}>
                 キャンセル
               </button>
-              <button className="btn btn-success" onClick={handleEndMeetingConfirm}>
-                終了してレポートへ
+              <button 
+                className="btn btn-success" 
+                onClick={handleEndMeetingConfirm}
+                disabled={isEndingMeeting}
+              >
+                {isEndingMeeting ? "終了中..." : "終了してレポートへ"}
               </button>
             </div>
           </div>
