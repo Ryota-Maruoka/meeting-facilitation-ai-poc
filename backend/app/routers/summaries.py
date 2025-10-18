@@ -231,13 +231,13 @@ def generate_meeting_summary(meeting_id: str) -> dict:
         # 文字起こしデータを読み込む
         transcripts = store.load_transcripts(meeting_id)
         if not transcripts:
-            raise HTTPException(400, "No transcripts found for this meeting")
+            raise HTTPException(400, "文字起こしデータが見つかりません。会議中に音声を録音してください。")
 
         # 全ての文字起こしテキストを結合
         all_text = "\n".join([t.get("text", "") for t in transcripts])
 
         if not all_text.strip():
-            raise HTTPException(400, "Transcript text is empty")
+            raise HTTPException(400, "文字起こしテキストが空です。会議中に音声を録音してください。")
 
         logger.info("Generating summary for meeting %s", meeting_id)
 

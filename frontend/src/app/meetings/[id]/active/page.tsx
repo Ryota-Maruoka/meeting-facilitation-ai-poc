@@ -38,6 +38,8 @@ import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
 import LiveTranscriptArea from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
+import DeviationAlert from "@/components/sections/DeviationAlert";
+import { useDeviationDetection } from "@/hooks/useDeviationDetection";
 import { apiClient } from "@/lib/api";
 import type { Meeting } from "@/lib/types";
 
@@ -55,6 +57,9 @@ export default function MeetingActivePage() {
   const [isMeetingStarted, setIsMeetingStarted] = useState<boolean>(false);
   const [meetingStartTime, setMeetingStartTime] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  
+  // 録音開始状態（文字起こしデータが存在するかどうかの指標）
+  const [isRecordingStarted, setIsRecordingStarted] = useState<boolean>(false);
 
   // -----------------------------
   // ステート
@@ -69,13 +74,6 @@ export default function MeetingActivePage() {
 
   const [summary, setSummary] = useState<string>("");
 
-  const [alerts, setAlerts] = useState<Array<{
-    id: string;
-    type: "deviation";
-    message: string;
-    timestamp: string;
-  }>>([]);
-
   const [parkingLot, setParkingLot] = useState<string[]>([]);
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
@@ -83,6 +81,22 @@ export default function MeetingActivePage() {
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
+
+  // 脱線検知機能
+  const {
+    currentAlert,
+    isCheckingDeviation,
+    consecutiveDeviations,
+    checkDeviation,
+    handleMarkAsRelated,
+    handleReturnToAgenda,
+    handleAddToParkingLot,
+    handleIgnoreDeviation,
+  } = useDeviationDetection({
+    meetingId,
+    transcripts,
+    isMeetingStarted,
+  });
 
   // 初期化：APIから会議データを取得
   useEffect(() => {
@@ -92,6 +106,10 @@ export default function MeetingActivePage() {
         setError(null);
         const meeting = await apiClient.getMeeting(meetingId);
         setMeetingData(meeting);
+        
+        // 保留事項も取得
+        const parkingItems = await apiClient.getParkingItems(meetingId);
+        setParkingLot(parkingItems.map(item => item.title));
       } catch (err) {
         console.error("Failed to fetch meeting data:", err);
         setError(err instanceof Error ? err.message : "会議データの取得に失敗しました");
@@ -120,11 +138,18 @@ export default function MeetingActivePage() {
 
   // 3分ごとに要約を取得・生成
   useEffect(() => {
-    if (!isMeetingStarted) return;
+    if (!isMeetingStarted || !isRecordingStarted) return;
 
     // 要約を生成・取得する関数
     const fetchSummary = async () => {
       try {
+        // まず文字起こしデータの存在を確認
+        const transcripts = await apiClient.getTranscripts(meetingId);
+        if (!transcripts || transcripts.length === 0) {
+          console.log("文字起こしデータがありません。音声を録音してください。");
+          return;
+        }
+
         console.log("要約を生成中...");
         // 要約を生成
         await apiClient.generateSummary(meetingId);
@@ -138,17 +163,34 @@ export default function MeetingActivePage() {
         }
       } catch (error) {
         console.error("要約の取得に失敗しました:", error);
+        
+        // エラーメッセージをユーザーに表示
+        if (error instanceof Error) {
+          if (error.message.includes("文字起こしデータが見つかりません")) {
+            console.log("文字起こしデータがありません。音声を録音してください。");
+          } else if (error.message.includes("文字起こしテキストが空です")) {
+            console.log("文字起こしテキストが空です。音声を録音してください。");
+          } else {
+            console.log("要約生成中にエラーが発生しました:", error.message);
+          }
+        }
       }
     };
 
-    // 初回実行（会議開始直後）
-    fetchSummary();
+    // 録音開始後、十分なデータが蓄積されるまで少し待機してから要約生成を試行
+    // 初回は3分後に実行（録音開始後の十分なデータ蓄積を待つ）
+    const initialTimeout = setTimeout(() => {
+      fetchSummary();
+    }, 3 * 60 * 1000); // 3分後
 
     // 3分ごとに要約を生成・取得
     const summaryInterval = setInterval(fetchSummary, 3 * 60 * 1000); // 3分 = 180秒 = 180,000ミリ秒
 
-    return () => clearInterval(summaryInterval);
-  }, [isMeetingStarted, meetingId]);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(summaryInterval);
+    };
+  }, [isMeetingStarted, isRecordingStarted, meetingId]);
 
   // 経過時間をフォーマット
   const formatElapsedTime = (seconds: number): string => {
@@ -200,18 +242,31 @@ export default function MeetingActivePage() {
   // -----------------------------
   // イベントハンドラ
   // -----------------------------
-  const handleIgnoreAlert = (alertId: string) => {
-    setAlerts(alerts.filter((alert) => alert.id !== alertId));
-    showSuccess("アラートを無視しました");
+  const handleDeviationMarkAsRelated = () => {
+    handleMarkAsRelated();
+    showSuccess("アジェンダに関連しているとマークしました");
   };
 
-  const handleMoveToParkingLot = (alertId: string) => {
-    const alert = alerts.find((a) => a.id === alertId);
-    if (alert) {
-      setParkingLot([...parkingLot, alert.message]);
-      setAlerts(alerts.filter((a) => a.id !== alertId));
+  const handleDeviationReturnToAgenda = () => {
+    handleReturnToAgenda();
+    showSuccess("軌道修正して議題に戻しました");
+  };
+
+  const handleDeviationAddToParkingLot = async (topic: string) => {
+    try {
+      await apiClient.addParkingItem(meetingId, topic);
+      handleAddToParkingLot(topic);
+      setParkingLot([...parkingLot, topic]);
       showSuccess("保留事項に追加しました");
+    } catch (error) {
+      console.error("保留事項の追加に失敗:", error);
+      showSuccess("保留事項の追加に失敗しました");
     }
+  };
+
+  const handleDeviationIgnore = () => {
+    handleIgnoreDeviation();
+    showSuccess("脱線アラートを無視しました");
   };
 
   const handleEndMeetingClick = () => {
@@ -227,6 +282,9 @@ export default function MeetingActivePage() {
       const now = new Date();
       setMeetingStartTime(now);
       setIsMeetingStarted(true);
+      
+      // 録音開始状態をリセット（文字起こしデータが蓄積されるまで待機）
+      setIsRecordingStarted(false);
     } catch (error) {
       console.error("Failed to start meeting:", error);
       showSuccess("会議の開始に失敗しました");
@@ -295,6 +353,12 @@ export default function MeetingActivePage() {
       timestamp: t.timestamp,
     }));
     setTranscripts(convertedTranscripts);
+    
+    // 文字起こしデータが存在する場合、録音開始状態を更新
+    if (newTranscripts.length > 0 && !isRecordingStarted) {
+      setIsRecordingStarted(true);
+      console.log("録音開始を検出しました。要約生成を開始します。");
+    }
   };
 
   // -----------------------------
@@ -464,44 +528,70 @@ export default function MeetingActivePage() {
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
               <span>要約</span>
+              {!isRecordingStarted && isMeetingStarted && (
+                <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
+                  (録音待機中...)
+                </span>
+              )}
             </div>
             <div className="section-content">
-              <div className="summary-text">{summary}</div>
+              {!isRecordingStarted && isMeetingStarted ? (
+                <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
+                  音声を録音すると要約が自動生成されます
+                </div>
+              ) : (
+                <div className="summary-text">{summary || "要約データがありません"}</div>
+              )}
             </div>
           </div>
 
           {/* アラート・保留事項の統合カラム */}
           <div className="column-section alert-parking-column">
-            {/* アラートセクション */}
+            {/* 脱線検知アラートセクション */}
             <div className="alert-section-inner">
               <div className="section-header">
                 <span className="material-icons icon-sm">{ICONS.ALERT}</span>
-                <span>アラート</span>
+                <span>脱線検知アラート</span>
+                {isCheckingDeviation && (
+                  <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
+                    (検知中...)
+                  </span>
+                )}
               </div>
               <div className="section-content">
-                {alerts.length === 0 ? (
-                  <div className="empty-state">アラートはありません</div>
+                {currentAlert ? (
+                  <DeviationAlert
+                    alert={currentAlert}
+                    onMarkAsRelated={handleDeviationMarkAsRelated}
+                    onReturnToAgenda={handleDeviationReturnToAgenda}
+                    onAddToParkingLot={handleDeviationAddToParkingLot}
+                    onDismiss={handleDeviationIgnore}
+                  />
                 ) : (
-                  alerts.map((alert) => (
-                    <div key={alert.id} className="alert-item">
-                      <div className="alert-timestamp">{alert.timestamp}</div>
-                      <div className="alert-message">{alert.message}</div>
-                      <div className="alert-actions">
-                        <button
-                          className="alert-btn alert-btn-ignore"
-                          onClick={() => handleIgnoreAlert(alert.id)}
-                        >
-                          無視
-                        </button>
-                        <button
-                          className="alert-btn alert-btn-parking"
-                          onClick={() => handleMoveToParkingLot(alert.id)}
-                        >
-                          保留事項へ
-                        </button>
+                  <div className="empty-state">
+                    脱線は検知されていません
+                    {consecutiveDeviations > 0 && (
+                      <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
+                        連続脱線: {consecutiveDeviations}回
                       </div>
-                    </div>
-                  ))
+                    )}
+                  </div>
+                )}
+                
+                {/* デバッグ情報（開発時のみ表示） */}
+                {process.env.NODE_ENV === "development" && (
+                  <div style={{ 
+                    fontSize: "10px", 
+                    color: "#999", 
+                    marginTop: "8px", 
+                    padding: "4px", 
+                    backgroundColor: "#f5f5f5", 
+                    borderRadius: "4px" 
+                  }}>
+                    文字起こし数: {transcripts.length} | 
+                    連続脱線: {consecutiveDeviations} | 
+                    検知中: {isCheckingDeviation ? "Yes" : "No"}
+                  </div>
                 )}
               </div>
             </div>
@@ -511,6 +601,11 @@ export default function MeetingActivePage() {
               <div className="section-header">
                 <span className="material-icons icon-sm">{ICONS.PARKING}</span>
                 <span>{PARKING_LOT_LABEL}</span>
+                {parkingLot.length > 0 && (
+                  <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
+                    ({parkingLot.length}件)
+                  </span>
+                )}
               </div>
               <div className="section-content">
                 {parkingLot.length === 0 ? (
@@ -519,7 +614,9 @@ export default function MeetingActivePage() {
                   <ul className="parking-list">
                     {parkingLot.map((item, index) => (
                       <li key={index} className="parking-item">
-                        {item}
+                        <div className="parking-item-content">
+                          <div className="parking-item-title">{item}</div>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -534,6 +631,16 @@ export default function MeetingActivePage() {
           <button className="btn" onClick={handleBackToListClick}>
             一覧に戻る
           </button>
+          {isMeetingStarted && (
+            <button 
+              className="btn btn-warning" 
+              onClick={checkDeviation}
+              disabled={isCheckingDeviation || transcripts.length < 3}
+              style={{ marginRight: "8px" }}
+            >
+              {isCheckingDeviation ? "検知中..." : "脱線検知実行"}
+            </button>
+          )}
           <button className="btn btn-danger btn-large" onClick={handleEndMeetingClick}>
             会議終了
           </button>

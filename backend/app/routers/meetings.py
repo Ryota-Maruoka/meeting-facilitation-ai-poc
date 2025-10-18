@@ -82,13 +82,14 @@ def list_meetings() -> list[Meeting]:
 
 
 @router.post("", response_model=Meeting, status_code=201)
-def create_meeting(payload: MeetingCreate) -> Meeting:
+def create_meeting(payload: dict) -> Meeting:
     """会議を作成する。
 
     会議情報を受け取り、データストアに保存して作成された会議を返す。
+    IDが指定されている場合はそれを使用し、指定されていない場合は新規生成する。
 
     Args:
-        payload: 会議作成リクエストデータ
+        payload: 会議作成リクエストデータ（IDが含まれる場合がある）
 
     Returns:
         作成された会議情報
@@ -97,19 +98,30 @@ def create_meeting(payload: MeetingCreate) -> Meeting:
         ValidationError: ビジネスルール違反（参加者数上限等）
         InfrastructureError: データストアエラー
     """
-    meeting_id = str(uuid4())
+    # IDが指定されている場合はそれを使用、そうでなければ新規生成
+    meeting_id = payload.get("id", str(uuid4()))
     now = datetime.now(timezone.utc)
+    
+    # payloadからMeetingCreateのフィールドを抽出
+    meeting_create = MeetingCreate(
+        title=payload["title"],
+        purpose=payload["purpose"],
+        deliverable_template=payload["deliverable_template"],
+        meetingDate=payload.get("meetingDate"),
+        participants=payload.get("participants", []),
+        agenda=payload.get("agenda", [])
+    )
 
     meeting_data = {
         "id": meeting_id,
         "created_at": now,
         "updated_at": now,
-        "title": payload.title,
-        "purpose": payload.purpose,
-        "deliverable_template": payload.deliverable_template,
-        "meetingDate": payload.meetingDate,
-        "participants": payload.participants,
-        "agenda": [item.model_dump() for item in payload.agenda],
+        "title": meeting_create.title,
+        "purpose": meeting_create.purpose,
+        "deliverable_template": meeting_create.deliverable_template,
+        "meetingDate": meeting_create.meetingDate,
+        "participants": meeting_create.participants,
+        "agenda": [item.model_dump() for item in meeting_create.agenda],
         "status": "draft",
     }
 

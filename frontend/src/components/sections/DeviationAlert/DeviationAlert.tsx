@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import {
   Warning as WarningIcon,
+  Check as CheckIcon,
   Refresh as RefreshIcon,
   LocalParking as ParkingIcon,
   Close as CloseIcon,
@@ -20,23 +21,25 @@ import {
 import { formatDateTime } from "@/lib/utils";
 import type { DeviationAlert } from "@/lib/types";
 
-type DeviationAlertCardProps = {
+type DeviationAlertProps = {
   alert: DeviationAlert;
-  onReturnToAgenda?: (topic: string) => void;
-  onAddToParkingLot?: (title: string, content: string) => void;
+  onMarkAsRelated?: () => void;
+  onReturnToAgenda?: () => void;
+  onAddToParkingLot?: (topic: string) => void;
   onDismiss?: () => void;
 };
 
 /**
- * セクションレベルコンポーネント: 脱線アラートカード
+ * セクションレベルコンポーネント: 脱線アラート
  * 
  * 会議がアジェンダから逸脱した際のアラート表示と対応アクション
  * 
  * @param props - コンポーネントのプロパティ
- * @returns 脱線アラートカードの JSX 要素
+ * @returns 脱線アラートの JSX 要素
  */
-const DeviationAlertCard: FC<DeviationAlertCardProps> = ({
+const DeviationAlertComponent: FC<DeviationAlertProps> = ({
   alert,
+  onMarkAsRelated,
   onReturnToAgenda,
   onAddToParkingLot,
   onDismiss,
@@ -53,12 +56,16 @@ const DeviationAlertCard: FC<DeviationAlertCardProps> = ({
     return "低";
   };
 
-  const handleReturnToAgenda = (topic: string) => {
-    onReturnToAgenda?.(topic);
+  const handleMarkAsRelated = () => {
+    onMarkAsRelated?.();
+  };
+
+  const handleReturnToAgenda = () => {
+    onReturnToAgenda?.();
   };
 
   const handleAddToParkingLot = () => {
-    onAddToParkingLot?.(alert.message, "脱線トピック");
+    onAddToParkingLot?.(alert.message);
   };
 
   const handleDismiss = () => {
@@ -73,6 +80,7 @@ const DeviationAlertCard: FC<DeviationAlertCardProps> = ({
         "& .MuiAlert-message": {
           width: "100%",
         },
+        mb: 2,
       }}
     >
       <Box>
@@ -127,25 +135,43 @@ const DeviationAlertCard: FC<DeviationAlertCardProps> = ({
         )}
 
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          {alert.suggestedTopics.map((topic, index) => (
-            <Button
-              key={index}
-              variant="outlined"
-              size="small"
-              startIcon={<RefreshIcon />}
-              onClick={() => handleReturnToAgenda(topic)}
-            >
-              議題「{topic}」へ戻す
-            </Button>
-          ))}
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<CheckIcon />}
+            onClick={handleMarkAsRelated}
+            sx={{ bgcolor: "#4caf50", "&:hover": { bgcolor: "#45a049" } }}
+          >
+            アジェンダに関連している
+          </Button>
+          
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<RefreshIcon />}
+            onClick={handleReturnToAgenda}
+            sx={{ bgcolor: "#2196f3", "&:hover": { bgcolor: "#1976d2" } }}
+          >
+            軌道修正して議題に戻す
+          </Button>
+          
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<ParkingIcon />}
+            onClick={handleAddToParkingLot}
+            sx={{ bgcolor: "#ff9800", "&:hover": { bgcolor: "#f57c00" } }}
+          >
+            保留事項に追加
+          </Button>
           
           <Button
             variant="outlined"
             size="small"
-            startIcon={<ParkingIcon />}
-            onClick={handleAddToParkingLot}
+            startIcon={<CloseIcon />}
+            onClick={handleDismiss}
           >
-            Parking Lotへ退避
+            無視
           </Button>
         </Box>
 
@@ -157,4 +183,4 @@ const DeviationAlertCard: FC<DeviationAlertCardProps> = ({
   );
 };
 
-export default DeviationAlertCard;
+export default DeviationAlertComponent;
