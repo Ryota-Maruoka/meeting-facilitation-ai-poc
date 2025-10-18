@@ -33,7 +33,7 @@
 import React, { useState, useMemo, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
-import { ICONS } from "@/lib/constants";
+import { ICONS, API_BASE_URL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
 import { generateMeetingId } from "@/lib/meetingStorage";
@@ -260,7 +260,7 @@ function MeetingCreationForm() {
 
     try {
       // バックエンドAPIで会議を作成
-      const response = await fetch('http://localhost:8000/meetings', {
+      const response = await fetch(`${API_BASE_URL}/meetings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

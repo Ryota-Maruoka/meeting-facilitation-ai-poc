@@ -24,6 +24,7 @@ env:
   ECS_CLUSTER_NAME: bemac-meeting-dev-fe-cluster
   ECS_SERVICE_NAME: bemac-meeting-dev-fe-service
   ECS_TASK_DEFINITION_NAME: bemac-meeting-dev-fe-task-definition
+  NEXT_PUBLIC_API_URL: https://meeting.fr-bemac.com
   # S3_BUCKET_NAME: aicanvas-kagetalk-s3-bucket
   # CLOUDFRONT_DISTRIBUTION_ID: E2NUYGSPFMSGQJ  # CloudFrontディストリビューションID
 
@@ -163,3 +164,5 @@ jobs:
           task-definition-name: ${{ env.ECS_TASK_DEFINITION_NAME }}
           dockerfile: .github/docker/web/Dockerfile
           context: frontend
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
