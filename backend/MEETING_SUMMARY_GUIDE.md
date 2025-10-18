@@ -27,7 +27,7 @@ pip install -r requirements.txt
 # Azure OpenAI設定（必須）
 AZURE_OPENAI_ENDPOINT=https://your-resource.cognitiveservices.azure.com
 AZURE_OPENAI_API_KEY=your-api-key-here
-AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
 
 # オプション設定（デフォルト値あり）
 AZURE_OPENAI_API_VERSION_RESPONSES=2025-04-01
@@ -237,5 +237,6 @@ pip install -r requirements.txt
 - `app/settings.py` - 設定管理
 - `run.py` - CLIエントリーポイント
 - `env.example` - 環境変数サンプル
+
 
 
