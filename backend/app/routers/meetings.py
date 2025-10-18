@@ -173,6 +173,8 @@ def update_meeting(meeting_id: str, payload: dict) -> Meeting:
     # 更新可能なフィールドを更新
     if "status" in payload:
         meeting["status"] = payload["status"]
+    if "started_at" in payload:
+        meeting["started_at"] = payload["started_at"]
     if "ended_at" in payload:
         meeting["ended_at"] = payload["ended_at"]
     if "started_at" in payload:

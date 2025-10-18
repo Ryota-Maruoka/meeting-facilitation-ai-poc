@@ -79,6 +79,7 @@ export default function MeetingActivePage() {
   const [parkingLot, setParkingLot] = useState<string[]>([]);
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
+  const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
@@ -246,7 +247,7 @@ export default function MeetingActivePage() {
         startTime: formatStartTime(meetingStartTime),
       };
 
-      sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
+        sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
 
       // APIで会議終了を呼び出し（非同期で実行し、完了を待たない）
       apiClient.endMeeting(meetingId).then(() => {
@@ -574,8 +575,12 @@ export default function MeetingActivePage() {
               <button className="btn" onClick={handleEndModalClose}>
                 キャンセル
               </button>
-              <button className="btn btn-success" onClick={handleEndMeetingConfirm}>
-                終了してレポートへ
+              <button 
+                className="btn btn-success" 
+                onClick={handleEndMeetingConfirm}
+                disabled={isEndingMeeting}
+              >
+                {isEndingMeeting ? "終了中..." : "終了してレポートへ"}
               </button>
             </div>
           </div>
