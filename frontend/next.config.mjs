@@ -6,10 +6,13 @@ const nextConfig = {
     typedRoutes: true
   },
   async rewrites() {
+    // 環境変数またはデフォルト値を使用
+    const backendUrl = process.env.BACKEND_API_URL || 'http://54.250.241.155:8000';
+
     return [
       {
         source: '/backend-api/:path*',
-        destination: 'http://54.250.241.155:8000/:path*',
+        destination: `${backendUrl}/:path*`,
       },
     ];
   },

@@ -25,6 +25,7 @@ env:
   ECS_SERVICE_NAME: bemac-meeting-dev-fe-service
   ECS_TASK_DEFINITION_NAME: bemac-meeting-dev-fe-task-definition
   NEXT_PUBLIC_API_URL: /backend-api
+  BACKEND_API_URL: http://54.250.241.155:8000
   # S3_BUCKET_NAME: aicanvas-kagetalk-s3-bucket
   # CLOUDFRONT_DISTRIBUTION_ID: E2NUYGSPFMSGQJ  # CloudFrontディストリビューションID
 
@@ -166,3 +167,4 @@ jobs:
           context: frontend
           build-args: |
             NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}
+            BACKEND_API_URL=${{ env.BACKEND_API_URL }}
