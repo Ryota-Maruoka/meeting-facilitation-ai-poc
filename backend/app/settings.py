@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     slack_webhook_url: str = ""
     
     # CORS
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = "http://localhost:3000,https://bemac-meeting.fr-aicompass.com"
     
     # ASR設定
     # asr_provider: "stub" (ダミーテキスト), "whisper_python" (Python版Whisper), "whisper_cpp" (C++版Whisper)
