@@ -57,6 +57,9 @@ export default function MeetingActivePage() {
   const [isMeetingStarted, setIsMeetingStarted] = useState<boolean>(false);
   const [meetingStartTime, setMeetingStartTime] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+  
+  // 録音開始状態（文字起こしデータが存在するかどうかの指標）
+  const [isRecordingStarted, setIsRecordingStarted] = useState<boolean>(false);
 
   // -----------------------------
   // ステート
@@ -135,11 +138,18 @@ export default function MeetingActivePage() {
 
   // 3分ごとに要約を取得・生成
   useEffect(() => {
-    if (!isMeetingStarted) return;
+    if (!isMeetingStarted || !isRecordingStarted) return;
 
     // 要約を生成・取得する関数
     const fetchSummary = async () => {
       try {
+        // まず文字起こしデータの存在を確認
+        const transcripts = await apiClient.getTranscripts(meetingId);
+        if (!transcripts || transcripts.length === 0) {
+          console.log("文字起こしデータがありません。音声を録音してください。");
+          return;
+        }
+
         console.log("要約を生成中...");
         // 要約を生成
         await apiClient.generateSummary(meetingId);
@@ -153,17 +163,34 @@ export default function MeetingActivePage() {
         }
       } catch (error) {
         console.error("要約の取得に失敗しました:", error);
+        
+        // エラーメッセージをユーザーに表示
+        if (error instanceof Error) {
+          if (error.message.includes("文字起こしデータが見つかりません")) {
+            console.log("文字起こしデータがありません。音声を録音してください。");
+          } else if (error.message.includes("文字起こしテキストが空です")) {
+            console.log("文字起こしテキストが空です。音声を録音してください。");
+          } else {
+            console.log("要約生成中にエラーが発生しました:", error.message);
+          }
+        }
       }
     };
 
-    // 初回実行（会議開始直後）
-    fetchSummary();
+    // 録音開始後、十分なデータが蓄積されるまで少し待機してから要約生成を試行
+    // 初回は3分後に実行（録音開始後の十分なデータ蓄積を待つ）
+    const initialTimeout = setTimeout(() => {
+      fetchSummary();
+    }, 3 * 60 * 1000); // 3分後
 
     // 3分ごとに要約を生成・取得
     const summaryInterval = setInterval(fetchSummary, 3 * 60 * 1000); // 3分 = 180秒 = 180,000ミリ秒
 
-    return () => clearInterval(summaryInterval);
-  }, [isMeetingStarted, meetingId]);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(summaryInterval);
+    };
+  }, [isMeetingStarted, isRecordingStarted, meetingId]);
 
   // 経過時間をフォーマット
   const formatElapsedTime = (seconds: number): string => {
@@ -255,6 +282,9 @@ export default function MeetingActivePage() {
       const now = new Date();
       setMeetingStartTime(now);
       setIsMeetingStarted(true);
+      
+      // 録音開始状態をリセット（文字起こしデータが蓄積されるまで待機）
+      setIsRecordingStarted(false);
     } catch (error) {
       console.error("Failed to start meeting:", error);
       showSuccess("会議の開始に失敗しました");
@@ -323,6 +353,12 @@ export default function MeetingActivePage() {
       timestamp: t.timestamp,
     }));
     setTranscripts(convertedTranscripts);
+    
+    // 文字起こしデータが存在する場合、録音開始状態を更新
+    if (newTranscripts.length > 0 && !isRecordingStarted) {
+      setIsRecordingStarted(true);
+      console.log("録音開始を検出しました。要約生成を開始します。");
+    }
   };
 
   // -----------------------------
@@ -492,9 +528,20 @@ export default function MeetingActivePage() {
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
               <span>要約</span>
+              {!isRecordingStarted && isMeetingStarted && (
+                <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
+                  (録音待機中...)
+                </span>
+              )}
             </div>
             <div className="section-content">
-              <div className="summary-text">{summary}</div>
+              {!isRecordingStarted && isMeetingStarted ? (
+                <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
+                  音声を録音すると要約が自動生成されます
+                </div>
+              ) : (
+                <div className="summary-text">{summary || "要約データがありません"}</div>
+              )}
             </div>
           </div>
 
