@@ -51,8 +51,9 @@ export default function MeetingActivePage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 会議開始時刻と経過時間
-  const [startTime] = useState<Date>(new Date());
+  // 会議開始状態
+  const [isMeetingStarted, setIsMeetingStarted] = useState<boolean>(false);
+  const [meetingStartTime, setMeetingStartTime] = useState<Date | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
   // -----------------------------
@@ -66,7 +67,7 @@ export default function MeetingActivePage() {
     timestamp: string;
   }>>([]);
 
-  const [summary] = useState<string>("");
+  const [summary, setSummary] = useState<string>("");
 
   const [alerts, setAlerts] = useState<Array<{
     id: string;
@@ -105,14 +106,42 @@ export default function MeetingActivePage() {
 
   // 経過時間の更新（1秒ごと）
   useEffect(() => {
+    if (!meetingStartTime) return;
+
     const timer = setInterval(() => {
       const now = new Date();
-      const elapsed = Math.floor((now.getTime() - startTime.getTime()) / 1000);
+      const elapsed = Math.floor((now.getTime() - meetingStartTime.getTime()) / 1000);
       setElapsedSeconds(elapsed);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [startTime]);
+  }, [meetingStartTime]);
+
+  // 3分ごとに要約を取得・生成
+  useEffect(() => {
+    if (!isMeetingStarted) return;
+
+    // 3分ごとに要約を生成・取得
+    const summaryInterval = setInterval(async () => {
+      try {
+        console.log("要約を生成中...");
+        // 要約を生成
+        await apiClient.generateSummary(meetingId);
+
+        // 生成された要約を取得
+        const summaryData = await apiClient.getSummary(meetingId);
+
+        if (summaryData && summaryData.summary) {
+          setSummary(summaryData.summary);
+          console.log("要約を更新しました");
+        }
+      } catch (error) {
+        console.error("要約の取得に失敗しました:", error);
+      }
+    }, 3 * 60 * 1000); // 3分 = 180秒 = 180,000ミリ秒
+
+    return () => clearInterval(summaryInterval);
+  }, [isMeetingStarted, meetingId]);
 
   // 経過時間をフォーマット
   const formatElapsedTime = (seconds: number): string => {
@@ -130,7 +159,8 @@ export default function MeetingActivePage() {
   };
 
   // 開始時刻をフォーマット
-  const formatStartTime = (date: Date): string => {
+  const formatStartTime = (date: Date | null): string => {
+    if (!date) return "--:--";
     const hours = date.getHours().toString().padStart(2, "0");
     const minutes = date.getMinutes().toString().padStart(2, "0");
     return `${hours}:${minutes}`;
@@ -181,9 +211,26 @@ export default function MeetingActivePage() {
     setEndModalOpen(true);
   };
 
+  const handleStartMeeting = async () => {
+    try {
+      // 会議開始APIを呼び出し
+      await apiClient.startMeeting(meetingId);
+
+      // 会議開始時刻を記録
+      const now = new Date();
+      setMeetingStartTime(now);
+      setIsMeetingStarted(true);
+
+      showSuccess("会議を開始しました");
+    } catch (error) {
+      console.error("Failed to start meeting:", error);
+      showSuccess("会議の開始に失敗しました");
+    }
+  };
+
   const handleEndMeetingConfirm = async () => {
     // 会議終了時に会議レポート用のデータを保存
-    if (meetingData) {
+    if (meetingData && meetingStartTime) {
       // 経過時間を計算（分単位）
       const durationMinutes = Math.floor(elapsedSeconds / 60);
 
@@ -192,22 +239,17 @@ export default function MeetingActivePage() {
         date: meetingData.meetingDate || new Date().toISOString().split('T')[0],
         participants: meetingData.participants.join("、"),
         duration: `${durationMinutes}分`,
-        startTime: formatStartTime(startTime),
+        startTime: formatStartTime(meetingStartTime),
       };
 
       sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
 
-      // APIで会議ステータスを更新
+      // APIで会議終了を呼び出し
       try {
-        await apiClient.updateMeeting(meetingId, {
-          status: "completed",
-          started_at: startTime.toISOString(),
-          ended_at: new Date().toISOString(),
-        });
-
-        console.log("Meeting status updated to completed");
+        await apiClient.endMeeting(meetingId);
+        console.log("Meeting ended successfully");
       } catch (error) {
-        console.error("Failed to update meeting status:", error);
+        console.error("Failed to end meeting:", error);
         showSuccess("会議は終了しましたが、ステータスの更新に失敗しました");
       }
     }
@@ -339,7 +381,7 @@ export default function MeetingActivePage() {
             </div>
             <div className="meeting-info-item">
               <strong>開始時刻:</strong>
-              <span>{formatStartTime(startTime)}</span>
+              <span>{formatStartTime(meetingStartTime)}</span>
             </div>
             <div className="meeting-info-item">
               <strong>経過時間:</strong>
@@ -350,6 +392,19 @@ export default function MeetingActivePage() {
               <span>{meetingData?.participants.join("、") || "なし"}</span>
             </div>
           </div>
+
+          {/* 会議開始ボタン（会議開始前のみ表示） */}
+          {!isMeetingStarted && (
+            <div style={{ marginTop: "16px", textAlign: "center" }}>
+              <button
+                className="btn btn-success btn-large"
+                onClick={handleStartMeeting}
+                style={{ fontSize: "16px", padding: "12px 32px" }}
+              >
+                会議開始
+              </button>
+            </div>
+          )}
         </div>
 
         {/* アジェンダ進捗バー */}
@@ -395,6 +450,7 @@ export default function MeetingActivePage() {
               <LiveTranscriptArea
                 meetingId={meetingId}
                 onTranscriptsUpdate={handleTranscriptsUpdate}
+                autoStart={isMeetingStarted}
               />
             </div>
           </div>

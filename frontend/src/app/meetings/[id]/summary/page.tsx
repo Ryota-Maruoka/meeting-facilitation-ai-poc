@@ -37,6 +37,7 @@ import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL, SUMMARY_PAGE_TITLE, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
+import { apiClient } from "@/lib/api";
 
 export default function MeetingSummaryPage() {
   const params = useParams();
@@ -51,64 +52,90 @@ export default function MeetingSummaryPage() {
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
 
-  // 会議データ（sessionStorageから取得）
+  // 会議データ
   const [summaryData, setSummaryData] = useState({
     title: "",
     date: "",
     participants: "",
     duration: "",
     startTime: "",
-    // バックエンド未実装のため、以下はダミーデータ
-    overallSummary: "要件すり合わせ会議では、認証方式の比較検討を中心に議論が行われ、バックエンドAPIの採用方針が決定されました。",
-    keyPoints: [
-      "認証方式の比較観点（性能/運用/障害時復旧）",
-      "JWTとMTLSの運用負荷の違い",
-      "セキュリティ要件の再確認が必要",
-    ],
-    decisions: [
-      {
-        description: "バックエンドはAPI A採用。理由：互換性と運用負荷。",
-        approver: "田中",
-        decidedAt: "12:05",
-      },
-    ],
-    unresolved: [
-      {
-        topic: "認可方式（JWT vs MTLS）",
-        missingInfo: "基盤運用方針・障害事例",
-        nextAction: "PoC比較＋セキュリティレビュー依頼",
-      },
-    ],
-    actions: [
-      {
-        task: "JWT PoC実施",
-        assignee: "佐藤",
-        dueDate: "10/18",
-      },
-      {
-        task: "SLA要件確認",
-        assignee: "鈴木",
-        dueDate: "10/15",
-      },
-    ],
-    parkingLot: ["ABテスト基盤の統合案"],
+    overallSummary: "",
+    keyPoints: [] as string[],
+    decisions: [] as string[],
+    unresolved: [] as string[],
+    actions: [] as Array<{ task: string; assignee: string; dueDate: string }>,
+    parkingLot: [] as string[],
+    transcripts: [] as Array<{ text: string; timestamp: string }>,
   });
 
-  // 初期化：sessionStorageから会議データを取得
+  // 初期化：sessionStorageとAPIから会議データを取得
   useEffect(() => {
-    const storedData = sessionStorage.getItem("meetingSummary");
-    if (storedData) {
-      const data = JSON.parse(storedData);
-      setSummaryData((prev) => ({
-        ...prev,
-        title: data.title || "",
-        date: data.date || "",
-        participants: data.participants || "",
-        duration: data.duration || "",
-        startTime: data.startTime || "",
-      }));
-    }
-  }, []);
+    const fetchSummaryData = async () => {
+      try {
+        // sessionStorageから基本情報を取得
+        const storedData = sessionStorage.getItem("meetingSummary");
+        let basicInfo = {
+          title: "",
+          date: "",
+          participants: "",
+          duration: "",
+          startTime: "",
+        };
+
+        if (storedData) {
+          const data = JSON.parse(storedData);
+          basicInfo = {
+            title: data.title || "",
+            date: data.date || "",
+            participants: data.participants || "",
+            duration: data.duration || "",
+            startTime: data.startTime || "",
+          };
+        }
+
+        // APIから要約データを取得
+        const summary = await apiClient.getSummary(meetingId);
+
+        // APIから文字起こしデータを取得
+        const transcripts = await apiClient.getTranscripts(meetingId);
+
+        setSummaryData({
+          ...basicInfo,
+          overallSummary: summary?.summary || "要約データがありません",
+          keyPoints: [],
+          decisions: summary?.decisions || [],
+          unresolved: summary?.undecided || [],
+          actions: (summary?.actions || []).map((action: any) => ({
+            task: action.title || "",
+            assignee: action.owner || "",
+            dueDate: action.due || "",
+          })),
+          parkingLot: [],
+          transcripts: transcripts.map((t: any) => ({
+            text: t.text,
+            timestamp: t.timestamp,
+          })),
+        });
+      } catch (error) {
+        console.error("Failed to fetch summary data:", error);
+        // エラー時はsessionStorageのデータのみ使用
+        const storedData = sessionStorage.getItem("meetingSummary");
+        if (storedData) {
+          const data = JSON.parse(storedData);
+          setSummaryData((prev) => ({
+            ...prev,
+            title: data.title || "",
+            date: data.date || "",
+            participants: data.participants || "",
+            duration: data.duration || "",
+            startTime: data.startTime || "",
+          }));
+        }
+      }
+    };
+
+    fetchSummaryData();
+  }, [meetingId]);
 
   // -----------------------------
   // イベントハンドラ
@@ -235,14 +262,15 @@ export default function MeetingSummaryPage() {
                 <span className="material-icons icon-sm">{ICONS.CHECK}</span>
                 <span>決定事項</span>
               </div>
-              {summaryData.decisions.map((decision, index) => (
-                <div key={index} className="decision-item">
-                  <div className="item-title">{decision.description}</div>
-                  <div className="item-meta">
-                    承認: {decision.approver} / 決定時刻: {decision.decidedAt}
+              {summaryData.decisions.length > 0 ? (
+                summaryData.decisions.map((decision, index) => (
+                  <div key={index} className="decision-item">
+                    <div className="item-title">{decision}</div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="section-content">決定事項はありません</div>
+              )}
             </div>
 
             {/* 未決事項 */}
@@ -251,17 +279,15 @@ export default function MeetingSummaryPage() {
                 <span className="material-icons icon-sm">{ICONS.ALERT}</span>
                 <span>未決事項（提案付き）</span>
               </div>
-              {summaryData.unresolved.map((item, index) => (
-                <div key={index} className="unresolved-item">
-                  <div className="item-title">{item.topic}</div>
-                  <div className="section-content">
-                    <div>不足情報: {item.missingInfo}</div>
-                    <div style={{ color: "#667eea", fontWeight: 600, marginTop: "4px" }}>
-                      次の一手: {item.nextAction}
-                    </div>
+              {summaryData.unresolved.length > 0 ? (
+                summaryData.unresolved.map((item, index) => (
+                  <div key={index} className="unresolved-item">
+                    <div className="item-title">{item}</div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="section-content">未決事項はありません</div>
+              )}
             </div>
 
             {/* アクションアイテム */}
@@ -270,27 +296,40 @@ export default function MeetingSummaryPage() {
                 <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
                 <span>アクションアイテム</span>
               </div>
-              {summaryData.actions.map((action, index) => (
-                <div key={index} className="action-item">
-                  <div className="item-title">{action.task}</div>
-                  <div className="item-meta">
-                    担当: {action.assignee} / 期限: {action.dueDate}
+              {summaryData.actions.length > 0 ? (
+                summaryData.actions.map((action, index) => (
+                  <div key={index} className="action-item">
+                    <div className="item-title">{action.task}</div>
+                    <div className="item-meta">
+                      担当: {action.assignee || "未定"} / 期限: {action.dueDate || "未定"}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="section-content">アクションアイテムはありません</div>
+              )}
             </div>
 
-            {/* 保留事項 */}
+            {/* 文字起こし内容 */}
             <div className="section">
               <div className="section-title">
-                <span className="material-icons icon-sm">{ICONS.PARKING}</span>
-                <span>{PARKING_LOT_LABEL}</span>
+                <span className="material-icons icon-sm">{ICONS.TRANSCRIBE}</span>
+                <span>文字起こし内容</span>
               </div>
-              {summaryData.parkingLot.map((item, index) => (
-                <div key={index} className="parking-item">
-                  {item}
+              {summaryData.transcripts.length > 0 ? (
+                <div className="section-content">
+                  {summaryData.transcripts.map((transcript, index) => (
+                    <div key={index} style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px solid #e6e8ee" }}>
+                      <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>
+                        {new Date(transcript.timestamp).toLocaleTimeString()}
+                      </div>
+                      <div>{transcript.text}</div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="section-content">文字起こし内容がありません</div>
+              )}
             </div>
 
           {/* フッターアクション */}

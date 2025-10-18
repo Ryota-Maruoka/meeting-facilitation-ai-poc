@@ -323,6 +323,34 @@ class ApiClient {
       body: JSON.stringify({ meetingId, webhookUrl }),
     });
   }
+
+  // 会議開始・終了
+  async startMeeting(meetingId: string): Promise<Meeting> {
+    const data = await this.request<Record<string, unknown>>(`/meetings/${meetingId}/start`, {
+      method: "POST",
+    });
+    return this.mapBackendMeetingToFrontend(data);
+  }
+
+  async endMeeting(meetingId: string): Promise<Meeting> {
+    const data = await this.request<Record<string, unknown>>(`/meetings/${meetingId}/end`, {
+      method: "POST",
+    });
+    return this.mapBackendMeetingToFrontend(data);
+  }
+
+  // 要約取得・生成
+  async getSummary(meetingId: string): Promise<any> {
+    return this.request<any>(`/meetings/${meetingId}/summary`, {
+      method: "GET",
+    });
+  }
+
+  async generateSummary(meetingId: string): Promise<any> {
+    return this.request<any>(`/meetings/${meetingId}/summary/generate`, {
+      method: "POST",
+    });
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

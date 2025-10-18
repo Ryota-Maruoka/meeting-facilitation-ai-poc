@@ -24,6 +24,7 @@ import type { Transcript } from "@/lib/types";
 type LiveTranscriptAreaProps = {
   meetingId: string;
   onTranscriptsUpdate?: (transcripts: Transcript[]) => void;
+  autoStart?: boolean; // 自動的に録音を開始するかどうか
 };
 
 type TranscriptItem = {
@@ -43,6 +44,7 @@ type TranscriptItem = {
 const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   meetingId,
   onTranscriptsUpdate,
+  autoStart = false,
 }) => {
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -63,6 +65,14 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       setError("このブラウザは音声録音をサポートしていません");
     }
   }, []);
+
+  // autoStartがtrueになったら自動的に録音を開始
+  useEffect(() => {
+    if (autoStart && !isRecording && isSupported) {
+      startRecording();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart]);
 
   // 音声チャンクを送信する関数
   const sendAudioChunk = useCallback(async (audioBlob: Blob) => {

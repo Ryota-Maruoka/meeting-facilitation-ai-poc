@@ -38,9 +38,13 @@ def add_transcript(meeting_id: str, chunk: TranscriptChunk) -> dict:
     meeting = store.load_meeting(meeting_id)
     if not meeting:
         raise HTTPException(404, "Meeting not found")
-    meeting["transcripts"].append(chunk.model_dump())
-    store.save_meeting(meeting_id, meeting)
-    return {"ok": True, "count": len(meeting["transcripts"])}
+
+    # 新しいストレージ構造: transcripts.jsonに追記
+    store.append_transcript(meeting_id, chunk.model_dump())
+
+    # 追加後のカウントを取得
+    transcripts = store.load_transcripts(meeting_id)
+    return {"ok": True, "count": len(transcripts)}
 
 
 @router.get("/transcripts")
@@ -59,7 +63,9 @@ def list_transcripts(meeting_id: str) -> list:
     meeting = store.load_meeting(meeting_id)
     if not meeting:
         raise HTTPException(404, "Meeting not found")
-    return meeting.get("transcripts", [])
+
+    # 新しいストレージ構造: transcripts.jsonから読み込む
+    return store.load_transcripts(meeting_id)
 
 
 @router.post("/transcribe")
@@ -118,10 +124,6 @@ async def transcribe_audio_upload(
             result = await transcribe_audio_file(temp_file_path)
             logger.info("Transcription completed: %s", result)
 
-            # 文字起こし結果を会議データに保存
-            if "transcripts" not in meeting:
-                meeting["transcripts"] = []
-
             # 文字起こし結果にIDとタイムスタンプを追加
             transcript_entry = {
                 "id": str(uuid4()),
@@ -131,10 +133,14 @@ async def transcribe_audio_upload(
                 "language": result.get("language", "ja"),
             }
 
-            meeting["transcripts"].append(transcript_entry)
-            meeting["updated_at"] = datetime.now(timezone.utc)
+            # 新しいストレージ構造: transcripts.jsonに追記
+            store.append_transcript(meeting_id, transcript_entry)
 
-            # 会議データを保存
+            # 音声データを録音ファイルに追記（1つのファイルにまとめる）
+            store.append_audio_chunk(meeting_id, content)
+
+            # 会議メタデータの更新日時を更新
+            meeting["updated_at"] = datetime.now(timezone.utc)
             store.save_meeting(meeting_id, meeting)
 
             logger.info("Transcription completed successfully for meeting %s", meeting_id)
