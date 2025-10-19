@@ -5,10 +5,10 @@
  */
 
 // API設定
-// 本番環境: EC2バックエンド (http://54.250.241.155:8000)
+// 本番環境: Vercelリライト経由でEC2バックエンドにプロキシ (/api → http://54.250.241.155:8000)
 // 開発環境: ローカルバックエンド (http://localhost:8000)
 // 環境変数 NEXT_PUBLIC_API_URL で上書き可能
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://54.250.241.155:8000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 // 会議設定
 export const MAX_MEETING_DURATION_MINUTES = 180;
