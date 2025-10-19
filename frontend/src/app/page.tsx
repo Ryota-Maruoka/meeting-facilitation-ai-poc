@@ -355,10 +355,22 @@ export default function MeetingHistoryPage() {
 
   const handleDateFieldClick = () => {
     if (!showCalendar) {
-      setCalendarSelectionMode("start");
       // カレンダーを開く時に、確定済みの日付を一時的な状態にコピー
-      setTempDateRange(dateRange);
-      setTempDateRangeTo(dateRangeTo);
+      // 日付が未選択の場合は当日の日付を設定し、終了日選択モードに
+      if (!dateRange && !dateRangeTo) {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const day = String(today.getDate()).padStart(2, "0");
+        const todayStr = `${year}-${month}-${day}`;
+        setTempDateRange(todayStr);
+        setTempDateRangeTo("");
+        setCalendarSelectionMode("end"); // 終了日選択モードに設定
+      } else {
+        setTempDateRange(dateRange);
+        setTempDateRangeTo(dateRangeTo);
+        setCalendarSelectionMode("start"); // 既存の日付がある場合は開始日から
+      }
     }
     setShowCalendar(!showCalendar);
   };
@@ -375,8 +387,9 @@ export default function MeetingHistoryPage() {
       } else {
         setTempDateRangeTo(date);
       }
-      setShowCalendar(false);
-      setCalendarSelectionMode(null);
+      // カレンダーは閉じずに、選択モードを維持
+      // setShowCalendar(false);
+      // setCalendarSelectionMode(null);
     }
   };
 
