@@ -99,7 +99,7 @@ jobs:
                 --command-id ${{ env.COMMAND_ID }} \
                 --instance-id ${{ secrets.EC2_INSTANCE_ID }} \
                 --query 'Status' \
-                --output text
+                --output text 2>&1
               echo "=== End Debug Info ==="
             fi
             
