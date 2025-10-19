@@ -1,125 +1,197 @@
 #!/usr/bin/env python3
 """
-Whisper.cppセットアップスクリプト
+Python版Whisperセットアップスクリプト
 
-音声文字起こし機能に必要なファイルを自動ダウンロードします。
+音声文字起こし機能に必要なPythonライブラリを自動インストールします。
 """
 
 import os
-import urllib.request
+import subprocess
 import sys
 from pathlib import Path
 
 
-def download_file(url: str, filepath: str, description: str) -> bool:
-    """ファイルをダウンロードする"""
+def install_package(package_name: str, description: str) -> bool:
+    """Pythonパッケージをインストールする"""
     try:
-        print(f"📥 {description}をダウンロード中...")
-        print(f"   URL: {url}")
-        print(f"   保存先: {filepath}")
+        print(f"📦 {description}をインストール中...")
+        print(f"   パッケージ: {package_name}")
         
-        # ディレクトリを作成
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        # pipでインストール
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "install", package_name],
+            capture_output=True,
+            text=True,
+            check=True
+        )
         
-        # ファイルをダウンロード
-        urllib.request.urlretrieve(url, filepath)
-        
-        # ファイルサイズを確認
-        file_size = os.path.getsize(filepath)
-        print(f"✅ ダウンロード完了: {file_size:,} bytes")
+        print(f"✅ インストール完了: {package_name}")
         return True
         
+    except subprocess.CalledProcessError as e:
+        print(f"❌ インストールエラー: {e}")
+        print(f"   エラー出力: {e.stderr}")
+        return False
     except Exception as e:
-        print(f"❌ ダウンロードエラー: {e}")
+        print(f"❌ 予期しないエラー: {e}")
         return False
 
 
-def setup_whisper_cpp():
-    """Whisper.cppのセットアップ"""
-    print("🎤 Whisper.cppセットアップを開始します...")
+def check_package(package_name: str, import_name: str = None) -> bool:
+    """Pythonパッケージがインストールされているかチェック"""
+    if import_name is None:
+        import_name = package_name
+    
+    try:
+        __import__(import_name)
+        print(f"✅ {package_name}は既にインストールされています")
+        return True
+    except ImportError:
+        print(f"⚠️ {package_name}がインストールされていません")
+        return False
+
+
+def setup_python_whisper():
+    """Python版Whisperのセットアップ"""
+    print("🎤 Python版Whisperセットアップを開始します...")
     
     # 現在のディレクトリを確認
     current_dir = Path.cwd()
     print(f"📁 作業ディレクトリ: {current_dir}")
     
-    # 1. モデルファイルのダウンロード
-    model_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
-    model_path = "whisper-cpp/models/ggml-base.bin"
+    success_count = 0
+    total_count = 0
     
-    if os.path.exists(model_path):
-        print(f"✅ モデルファイルは既に存在します: {model_path}")
+    # 1. PyTorchのインストール確認
+    total_count += 1
+    print(f"\n[{total_count}/3] PyTorchライブラリをチェック中...")
+    if not check_package("torch"):
+        if install_package("torch", "PyTorchライブラリ"):
+            success_count += 1
     else:
-        success = download_file(
-            model_url, 
-            model_path, 
-            "Whisperモデルファイル（ggml-base.bin, 約1.5GB）"
-        )
-        if not success:
-            print("❌ モデルファイルのダウンロードに失敗しました")
-            return False
+        success_count += 1
     
-    # 2. 実行ファイルの確認
-    main_exe = "main.exe"
-    if os.path.exists(main_exe):
-        print(f"✅ 実行ファイルは既に存在します: {main_exe}")
+    # 2. Whisperライブラリのインストール確認
+    total_count += 1
+    print(f"\n[{total_count}/3] Whisperライブラリをチェック中...")
+    if not check_package("openai-whisper", "whisper"):
+        if install_package("openai-whisper", "OpenAI Whisperライブラリ"):
+            success_count += 1
     else:
-        print("⚠️ 実行ファイル（main.exe）が見つかりません")
-        print("   以下のURLから手動でダウンロードしてください:")
-        print("   https://github.com/ggerganov/whisper.cpp/releases")
-        print("   Windows版の最新リリースをダウンロードして、backend/ディレクトリに配置してください")
-        print("\n   📋 ダウンロード手順:")
-        print("   1. 上記URLにアクセス")
-        print("   2. 最新リリースの「Assets」を展開")
-        print("   3. 「whisper-bin-win64.zip」をダウンロード")
-        print("   4. 解凍して「main.exe」をbackend/ディレクトリに配置")
+        success_count += 1
     
-    # 3. セットアップ完了確認
-    print("\n🎉 Whisper.cppセットアップ完了！")
-    print("\n📋 次のステップ:")
-    print("1. バックエンドサーバーを起動: python run.py")
-    print("2. 音声認識テストを実行: python test_whisper.py")
-    print("3. フロントエンドを起動: cd ../frontend && npm run dev")
+    # 3. 動作テスト
+    total_count += 1
+    print(f"\n[{total_count}/3] Python版Whisperの動作テスト中...")
+    try:
+        import whisper
+        print(f"📋 Whisperバージョン: {whisper.__version__}")
+        
+        # 小さなモデルでテスト
+        print("🔍 モデルロードテスト中...")
+        model = whisper.load_model("tiny")
+        print("✅ モデルロード成功")
+        
+        success_count += 1
+        
+    except Exception as e:
+        print(f"❌ 動作テストエラー: {e}")
     
-    return True
+    # 結果表示
+    print(f"\n📊 セットアップ結果: {success_count}/{total_count} 成功")
+    
+    if success_count == total_count:
+        print("🎉 Python版Whisperセットアップ完了!")
+        
+        # 環境変数ファイルを作成
+        print("\n📝 環境設定ファイルを作成中...")
+        env_content = """# Python版Whisper設定
+ASR_PROVIDER=whisper_python
+ASR_LANGUAGE=ja
+ASR_TEMPERATURE=0.0
+"""
+        
+        with open(".env", "w", encoding="utf-8") as f:
+            f.write(env_content)
+        print("✅ .env ファイルを作成しました")
+        
+        print("\n📋 次のステップ:")
+        print("1. バックエンドサーバーを起動: python run.py")
+        print("2. 音声認識テストを実行: python test_whisper.py")
+        print("3. フロントエンドを起動: cd ../frontend && npm run dev")
+        
+        return True
+    else:
+        print("❌ セットアップに失敗しました")
+        print("手動でインストールしてください:")
+        print("pip install openai-whisper torch")
+        return False
 
 
 def check_ffmpeg():
     """FFmpegの存在確認"""
-    print("\n🔍 FFmpegの確認中...")
+    print("\n🔍 FFmpegの存在確認中...")
     
     try:
-        import subprocess
-        result = subprocess.run(['ffmpeg', '-version'], 
-                              capture_output=True, text=True, timeout=5)
+        result = subprocess.run(
+            ["ffmpeg", "-version"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
         if result.returncode == 0:
             print("✅ FFmpegがインストールされています")
+            version_line = result.stdout.split('\n')[0]
+            print(f"   バージョン: {version_line}")
             return True
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        pass
-    
-    print("❌ FFmpegが見つかりません")
-    print("   以下のコマンドでインストールしてください:")
-    print("   Windows: winget install Gyan.FFmpeg")
-    print("   macOS: brew install ffmpeg")
-    print("   Linux: sudo apt install ffmpeg")
-    return False
+        else:
+            print("❌ FFmpegが正しくインストールされていません")
+            return False
+            
+    except FileNotFoundError:
+        print("❌ FFmpegが見つかりません")
+        print("解決方法:")
+        print("  Windows: https://ffmpeg.org/download.html")
+        print("  macOS: brew install ffmpeg")
+        print("  Ubuntu: sudo apt install ffmpeg")
+        return False
+    except subprocess.TimeoutExpired:
+        print("⚠️ FFmpegの確認がタイムアウトしました")
+        return False
+    except Exception as e:
+        print(f"❌ FFmpeg確認エラー: {e}")
+        return False
 
 
-if __name__ == "__main__":
-    print("🚀 Meeting Facilitation AI PoC - Whisper.cppセットアップ")
+def main():
+    """メイン関数"""
+    print("=" * 60)
+    print("  🎤 Python版Whisperセットアップスクリプト")
     print("=" * 60)
     
-    # FFmpegの確認
-    ffmpeg_ok = check_ffmpeg()
+    # Whisperセットアップ
+    whisper_ok = setup_python_whisper()
     
-    # Whisper.cppのセットアップ
-    whisper_ok = setup_whisper_cpp()
+    # FFmpeg確認
+    ffmpeg_ok = check_ffmpeg()
     
     print("\n" + "=" * 60)
     if whisper_ok and ffmpeg_ok:
-        print("🎉 セットアップが完了しました！")
-        print("   音声文字起こし機能が使用できます。")
+        print("🎉 すべてのセットアップが完了しました!")
+        print("✅ Python版Whisper: 準備完了")
+        print("✅ FFmpeg: 準備完了")
+    elif whisper_ok:
+        print("⚠️ Whisperは準備完了ですが、FFmpegが必要です")
+        print("✅ Python版Whisper: 準備完了")
+        print("❌ FFmpeg: 未インストール")
     else:
-        print("⚠️ セットアップに問題があります。")
-        print("   上記のエラーメッセージを確認してください。")
-        sys.exit(1)
+        print("❌ セットアップに失敗しました")
+        print("❌ Python版Whisper: セットアップ失敗")
+        print("❌ FFmpeg: 確認できません")
+    
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    main()

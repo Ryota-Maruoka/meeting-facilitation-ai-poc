@@ -2,156 +2,139 @@
 """
 無料ASRセットアップスクリプト
 
-Whisper.cppを自動的にダウンロード・セットアップします
+Python版Whisperを自動的にセットアップします
 """
 
 import os
 import sys
 import subprocess
-import urllib.request
-import zipfile
-import shutil
-from pathlib import Path
 
 
-def download_file(url: str, filename: str) -> str:
-    """ファイルをダウンロード"""
-    print(f"Downloading {filename}...")
-    urllib.request.urlretrieve(url, filename)
-    return filename
-
-
-def extract_zip(zip_path: str, extract_to: str):
-    """ZIPファイルを展開"""
-    print(f"Extracting {zip_path}...")
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_to)
-
-
-def setup_whisper_cpp():
-    """Whisper.cppをセットアップ"""
-    print("🆓 無料ASR（Whisper.cpp）セットアップを開始します...")
-    
-    # 作業ディレクトリを作成
-    whisper_dir = Path("whisper-cpp")
-    whisper_dir.mkdir(exist_ok=True)
+def setup_python_whisper():
+    """Python版Whisperをセットアップ"""
+    print("🆓 無料ASR（Python版Whisper）セットアップを開始します...")
     
     try:
-        # 1. Whisper.cppのリリースをダウンロード
-        print("1. Whisper.cppをダウンロード中...")
+        # 1. Whisperライブラリのインストール確認
+        print("1. Python版Whisperライブラリをチェック中...")
         
-        # Windows用の最新リリース（例：v1.5.4）
-        release_url = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/whisper-bin-x64.zip"
-        zip_file = "whisper-bin-x64.zip"
+        try:
+            import whisper
+            print("✅ Whisperライブラリは既にインストールされています")
+            print(f"   バージョン: {whisper.__version__}")
+        except ImportError:
+            print("📦 Whisperライブラリをインストール中...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "openai-whisper"], check=True)
+            print("✅ Whisperライブラリのインストール完了")
         
-        if not os.path.exists(zip_file):
-            download_file(release_url, zip_file)
+        # 2. PyTorchの確認
+        print("2. PyTorchライブラリをチェック中...")
+        try:
+            import torch
+            print("✅ PyTorchライブラリは既にインストールされています")
+            print(f"   バージョン: {torch.__version__}")
+            
+            if torch.cuda.is_available():
+                print(f"🚀 CUDA利用可能: {torch.cuda.get_device_name(0)}")
+            else:
+                print("💻 CPUモードで実行")
+                
+        except ImportError:
+            print("📦 PyTorchライブラリをインストール中...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "torch"], check=True)
+            print("✅ PyTorchライブラリのインストール完了")
         
-        # 2. 展開
-        print("2. ファイルを展開中...")
-        extract_zip(zip_file, ".")
-        
-        # 3. モデルファイルをダウンロード
-        print("3. モデルファイルをダウンロード中...")
-        models_dir = whisper_dir / "models"
-        models_dir.mkdir(exist_ok=True)
-        
-        # ベースモデル（約1.5GB）
-        model_url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
-        model_file = models_dir / "ggml-base.bin"
-        
-        if not model_file.exists():
-            print("モデルファイルをダウンロード中（約1.5GB）...")
-            urllib.request.urlretrieve(model_url, model_file)
+        # 3. テスト実行
+        print("3. Python版Whisperの動作テスト中...")
+        try:
+            import whisper
+            model = whisper.load_model("tiny")
+            print("✅ Python版Whisperの動作確認完了")
+        except Exception as e:
+            print(f"⚠️ 動作テストでエラー: {e}")
+            return False
         
         # 4. 環境変数ファイルを作成
         print("4. 環境設定ファイルを作成中...")
-        env_content = f"""# 無料ASR設定
-ASR_PROVIDER=whisper_cpp
-WHISPER_EXECUTABLE_PATH={whisper_dir.absolute()}/whisper.exe
-WHISPER_MODEL_PATH={model_file.absolute()}
+        env_content = """# 無料ASR設定（Python版Whisper）
+ASR_PROVIDER=whisper_python
 ASR_LANGUAGE=ja
 ASR_TEMPERATURE=0.0
 """
         
         with open(".env", "w", encoding="utf-8") as f:
             f.write(env_content)
+        print("✅ .env ファイルを作成しました")
         
-        # 5. テスト実行
-        print("5. セットアップをテスト中...")
-        whisper_exe = whisper_dir / "whisper.exe"
+        print("\n🎉 Python版Whisperセットアップ完了!")
+        print("📋 次のステップ:")
+        print("1. バックエンドサーバーを起動: python run.py")
+        print("2. 音声認識テストを実行: python test_whisper.py")
+        print("3. フロントエンドを起動: cd ../frontend && npm run dev")
         
-        if whisper_exe.exists():
-            # バージョン確認
-            result = subprocess.run([str(whisper_exe), "--help"], 
-                                  capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                print("✅ Whisper.cppのセットアップが完了しました！")
-                print(f"実行ファイル: {whisper_exe}")
-                print(f"モデルファイル: {model_file}")
-                return True
-            else:
-                print("❌ Whisper.cppのテストに失敗しました")
-                return False
-        else:
-            print("❌ Whisper.cppの実行ファイルが見つかりません")
-            return False
-            
+        return True
+        
     except Exception as e:
         print(f"❌ セットアップエラー: {e}")
         return False
-    
-    finally:
-        # 一時ファイルを削除
-        if os.path.exists(zip_file):
-            os.remove(zip_file)
 
 
 def setup_alternative_asr():
-    """代替の無料ASRオプション"""
-    print("\n🔄 代替の無料ASRオプション:")
-    print("1. ブラウザのWeb Speech API（フロントエンド）")
-    print("2. オフライン音声認識ライブラリ")
-    print("3. スタブ実装（開発用）")
+    """代替ASR（スタブ実装）をセットアップ"""
+    print("🆓 代替ASR（スタブ実装）セットアップを開始します...")
     
-    # スタブ実装の設定
-    env_content = """# スタブASR設定（開発用）
+    try:
+        # 環境変数ファイルを作成
+        print("1. 環境設定ファイルを作成中...")
+        env_content = """# 代替ASR設定（スタブ実装）
 ASR_PROVIDER=stub
 ASR_LANGUAGE=ja
 ASR_TEMPERATURE=0.0
 """
-    
-    with open(".env", "w", encoding="utf-8") as f:
-        f.write(env_content)
-    
-    print("✅ スタブ実装に設定しました（開発用）")
+        
+        with open(".env", "w", encoding="utf-8") as f:
+            f.write(env_content)
+        print("✅ .env ファイルを作成しました")
+        
+        print("\n🎉 代替ASRセットアップ完了!")
+        print("📋 次のステップ:")
+        print("1. バックエンドサーバーを起動: python run.py")
+        print("2. 音声認識テストを実行: python test_whisper.py")
+        print("3. フロントエンドを起動: cd ../frontend && npm run dev")
+        print("\n⚠️ 注意: スタブ実装は開発・テスト用です")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ セットアップエラー: {e}")
+        return False
 
 
 def main():
     """メイン関数"""
-    print("🎤 無料ASRセットアップツール")
-    print("=" * 50)
-    
-    # 現在のディレクトリを確認
-    if not os.path.exists("app"):
-        print("❌ バックエンドディレクトリで実行してください")
-        sys.exit(1)
-    
-    print("選択してください:")
-    print("1. Whisper.cpp（推奨、約1.5GB）")
+    print("=" * 60)
+    print("  🎤 無料ASRセットアップスクリプト")
+    print("=" * 60)
+    print()
+    print("利用可能なASRオプション:")
+    print("1. Python版Whisper（推奨、約1GB）")
     print("2. スタブ実装（開発用）")
+    print()
     
-    choice = input("選択 (1 or 2): ").strip()
+    choice = input("選択してください (1 or 2): ").strip()
     
     if choice == "1":
-        success = setup_whisper_cpp()
+        success = setup_python_whisper()
         if not success:
-            print("\n⚠️ Whisper.cppのセットアップに失敗しました")
-            setup_alternative_asr()
+            print("\n⚠️ Python版Whisperのセットアップに失敗しました")
+            print("代替ASR（スタブ実装）をセットアップしますか？")
+            fallback = input("代替ASRをセットアップしますか？ (y/n): ").strip().lower()
+            if fallback == 'y':
+                setup_alternative_asr()
     elif choice == "2":
         setup_alternative_asr()
     else:
-        print("無効な選択です")
+        print("❌ 無効な選択です")
         sys.exit(1)
     
     print("\n🎉 セットアップ完了！")
