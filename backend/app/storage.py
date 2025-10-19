@@ -5,26 +5,8 @@ from typing import Optional, Dict, Any, List
 class DataStore:
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
-        # データディレクトリの作成と権限チェック
-        self._ensure_data_directory()
-
-    def _ensure_data_directory(self):
-        """データディレクトリの作成と権限チェック"""
-        try:
-            os.makedirs(self.base_dir, exist_ok=True)
-            os.makedirs(os.path.join(self.base_dir, "meetings"), exist_ok=True)
-            
-            # 書き込み権限のテスト
-            test_file = os.path.join(self.base_dir, ".write_test")
-            try:
-                with open(test_file, "w") as f:
-                    f.write("test")
-                os.remove(test_file)
-            except Exception as e:
-                raise PermissionError(f"Cannot write to data directory {self.base_dir}: {e}")
-                
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize data directory {self.base_dir}: {e}")
+        os.makedirs(self.base_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.base_dir, "meetings"), exist_ok=True)
 
     def _meeting_dir(self, meeting_id: str) -> str:
         """会議ごとのディレクトリパスを取得"""
