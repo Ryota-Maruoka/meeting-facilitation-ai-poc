@@ -434,6 +434,32 @@ sudo systemctl restart meeting-api
 - Elastic IPを割り当てる（無料、使用中のみ）
 - または、ドメイン（Route 53）を使用する
 
+---
+
+## 🔄 コード更新・デプロイ
+
+### 自動デプロイ（推奨）
+
+**mainブランチにpush**すると、GitHub Actionsが自動的にEC2にデプロイします。
+
+詳細: [`DEPLOY_AUTOMATION.md`](./DEPLOY_AUTOMATION.md)
+
+### 手動デプロイ
+
+バックエンドのコードを更新した場合：
+
+```powershell
+cd backend
+.\deploy-to-ec2.ps1
+```
+
+**実行内容**:
+1. ファイルをEC2に転送
+2. サービスを再起動
+3. 動作確認
+
+**注意**: コード更新後は必ずデプロイが必要です！
+
 ### 無料利用枠の制限
 
 | 項目 | 無料枠 | 超過後の料金 |
