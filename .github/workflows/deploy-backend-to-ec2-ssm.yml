@@ -25,6 +25,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-northeast-1
 
+      - name: Test AWS credentials
+        run: |
+          echo "Testing AWS credentials..."
+          aws sts get-caller-identity
+          echo "AWS credentials test completed"
+
       - name: Package backend files
         run: |
           cd backend
@@ -101,6 +107,21 @@ jobs:
                 --query 'Status' \
                 --output text 2>&1
               echo "=== End Debug Info ==="
+            fi
+            
+            # 権限エラーの場合は即座に終了
+            if [[ "$STATUS" == *"AccessDeniedException"* ]]; then
+              echo "❌ Access Denied: IAMポリシーを確認してください"
+              echo "現在のIAMポリシー:"
+              echo "  - ssm:SendCommand: ✅"
+              echo "  - ssm:GetCommandInvocation: ✅"
+              echo "  - ssm:ListCommandInvocations: ✅"
+              echo "  - Resource: *"
+              echo "解決方法:"
+              echo "  1. IAMポリシーを再作成"
+              echo "  2. IAMユーザーに新しいポリシーをアタッチ"
+              echo "  3. 一時的にPowerUserAccessをアタッチ"
+              exit 1
             fi
             
             if [ "$STATUS" = "Success" ]; then
