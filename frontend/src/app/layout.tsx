@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   title: "Meeting Facilitation PoC",
   description: "AI meeting facilitation PoC UI",
   icons: {
-    icon: '/icon.svg',
+    icon: 'https://www.bemac-fr.com/favicon.ico',
   },
 };
 
