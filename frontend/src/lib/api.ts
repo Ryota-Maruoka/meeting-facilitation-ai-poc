@@ -64,12 +64,18 @@ class ApiClient {
       deliverable_template: payload.expectedOutcome,
       meetingDate: payload.meetingDate,
       participants: payload.participants ?? [],
-      agenda: (payload.agenda ?? []).map((item: any) => ({
-        title: item.title,
-        duration: item.duration,
-        expectedOutcome: item.expectedOutcome,
-        relatedUrl: item.relatedUrl,
-      })),
+      agenda: (payload.agenda ?? []).map((item: any) => {
+        const agendaItem: Record<string, unknown> = {
+          title: item.title,
+          duration: item.duration,
+          expectedOutcome: item.expectedOutcome || "",
+        };
+        // relatedUrlがnullまたは空文字列でない場合のみ追加
+        if (item.relatedUrl) {
+          agendaItem.relatedUrl = item.relatedUrl;
+        }
+        return agendaItem;
+      }),
     };
   }
 
