@@ -75,3 +75,6 @@ logs/
 
 # OS
 Thumbs.db
+
+# SSH keys (プロジェクト固有のSSH秘密鍵)
+.ssh/

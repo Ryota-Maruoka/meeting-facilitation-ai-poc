@@ -14,6 +14,18 @@ EC2へのバックエンドデプロイを自動化する方法
 
 ## 🚀 デプロイスクリプト（手動）
 
+### 初回セットアップ
+
+**SSH鍵の配置**（初回のみ）：
+
+```powershell
+# プロジェクトルートで実行
+mkdir .ssh
+Copy-Item ~\Downloads\meeting-api-key.pem .\.ssh\
+```
+
+詳細: [`.ssh/README.md`](../.ssh/README.md)
+
 ### 使い方
 
 **PowerShell**で以下を実行：
