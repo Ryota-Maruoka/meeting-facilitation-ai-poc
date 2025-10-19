@@ -451,7 +451,7 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                     wav_data = convert_webm_to_wav(webm_data)
 
                     # 一時WAVファイルとして保存
-                    import tempfile
+                    # import tempfile
                     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
                         temp_wav.write(wav_data)
                         temp_wav_path = temp_wav.name

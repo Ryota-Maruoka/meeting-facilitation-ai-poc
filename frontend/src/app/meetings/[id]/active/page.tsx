@@ -528,16 +528,11 @@ export default function MeetingActivePage() {
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
               <span>要約</span>
-              {!isRecordingStarted && isMeetingStarted && (
-                <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
-                  (録音待機中...)
-                </span>
-              )}
             </div>
             <div className="section-content">
-              {!isRecordingStarted && isMeetingStarted ? (
+              {!isRecordingStarted || !isMeetingStarted ? (
                 <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
-                  音声を録音すると要約が自動生成されます
+                  文字起こしが開始されると要約が自動生成されます
                 </div>
               ) : (
                 <div className="summary-text">{summary || "要約データがありません"}</div>
