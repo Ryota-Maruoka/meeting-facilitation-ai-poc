@@ -105,5 +105,5 @@ runs:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
         cluster: ${{ inputs.cluster-name }}
         service: ${{ inputs.service-name }}
-        wait-for-service-stability: false
+        wait-for-service-stability: true
         propagate-tags: TASK_DEFINITION
