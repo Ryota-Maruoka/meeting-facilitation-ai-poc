@@ -76,5 +76,8 @@ logs/
 # OS
 Thumbs.db
 
-# SSH keys (ƒvƒƒWƒFƒNƒgŒÅ—L‚ÌSSH”é–§Œ®)
+# SSH keys (ï¿½vï¿½ï¿½ï¿½Wï¿½Fï¿½Nï¿½gï¿½Å—Lï¿½ï¿½SSHï¿½é–§ï¿½ï¿½)
 .ssh/
+
+# ç„¡åŠ¹ãªãƒ•ã‚¡ã‚¤ãƒ«åã®ãƒ•ã‚¡ã‚¤ãƒ«
+"not recognized as a name of a cmdlet, function, script file, or executable program."
