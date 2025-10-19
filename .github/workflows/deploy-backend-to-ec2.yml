@@ -30,18 +30,24 @@ jobs:
             exit 1
           fi
           
-          ssh-keyscan -H ${{ secrets.EC2_IP }} >> ~/.ssh/known_hosts
+          echo "Scanning EC2 host key..."
+          ssh-keyscan -H ${{ secrets.EC2_IP }} >> ~/.ssh/known_hosts 2>&1 || echo "Warning: ssh-keyscan failed, will use StrictHostKeyChecking=no"
+          
+          # SSH接続オプションを設定（ホスト鍵チェックを無効化）
+          echo "Host ${{ secrets.EC2_IP }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
 
       - name: Deploy backend files to EC2
         run: |
           cd backend
-          scp -i ~/.ssh/meeting-api-key.pem -r \
+          scp -i ~/.ssh/meeting-api-key.pem -o StrictHostKeyChecking=no -r \
             app/ run.py requirements.txt \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }}:~/backend/
 
       - name: Restart backend service
         run: |
-          ssh -i ~/.ssh/meeting-api-key.pem \
+          ssh -i ~/.ssh/meeting-api-key.pem -o StrictHostKeyChecking=no \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
             "sudo systemctl restart meeting-api"
 
@@ -50,7 +56,7 @@ jobs:
 
       - name: Verify deployment
         run: |
-          ssh -i ~/.ssh/meeting-api-key.pem \
+          ssh -i ~/.ssh/meeting-api-key.pem -o StrictHostKeyChecking=no \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_IP }} \
             "curl -f http://localhost:8000/health || exit 1"
 
