@@ -454,13 +454,11 @@ sudo systemctl restart meeting-api
 
 ## 🔄 コード更新・デプロイ
 
-### 自動デプロイ（推奨）
+### 手動デプロイ（推奨）
 
-**mainブランチにpush**すると、GitHub Actionsが自動的にEC2にデプロイします。
+**注意**: GitHub Actionsの自動デプロイは、セキュリティグループの制約により無効化されています。
 
-詳細: [`DEPLOY_AUTOMATION.md`](./DEPLOY_AUTOMATION.md)
-
-### 手動デプロイ
+以下の手動デプロイスクリプトを使用してください：
 
 バックエンドのコードを更新した場合：
 
