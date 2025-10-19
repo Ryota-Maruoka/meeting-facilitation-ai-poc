@@ -69,6 +69,22 @@ ssh -i your-key.pem ec2-user@<EC2のIP>
 # システム更新とツールインストール
 sudo dnf update -y
 sudo dnf install -y python3.11 python3.11-pip git cmake gcc-c++
+
+# FFmpegのインストール（音声処理に必要）
+sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+sudo dnf install -y --nogpgcheck https://download1.rpmfusion.org/free/el/rpmfusion-free-release-9.noarch.rpm
+sudo dnf install -y ffmpeg
+
+# 確認
+ffmpeg -version
+```
+
+または、セットアップスクリプトを使用：
+
+```bash
+# セットアップスクリプトを実行
+chmod +x ~/setup-ec2-dependencies.sh
+~/setup-ec2-dependencies.sh
 ```
 
 #### 1-4. プロジェクトの転送
