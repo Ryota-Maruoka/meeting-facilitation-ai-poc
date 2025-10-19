@@ -23,6 +23,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/meeting-api-key.pem
           chmod 600 ~/.ssh/meeting-api-key.pem
+          
+          # EC2_IPが設定されているか確認
+          if [ -z "${{ secrets.EC2_IP }}" ]; then
+            echo "Error: EC2_IP secret is not set"
+            exit 1
+          fi
+          
           ssh-keyscan -H ${{ secrets.EC2_IP }} >> ~/.ssh/known_hosts
 
       - name: Deploy backend files to EC2
