@@ -25,11 +25,11 @@ def transcribe_audio_free(content: bytes, chunk_seconds: int = 30) -> List[Dict]
     Returns:
         文字起こしチャンクのリスト
     """
-    # 1. Whisper.cppを試行
+    # 1. Python版Whisperを試行
     try:
-        return transcribe_with_whisper_cpp(content)
+        return transcribe_with_python_whisper(content)
     except Exception as e:
-        print(f"Whisper.cpp failed: {e}")
+        print(f"Python版Whisper failed: {e}")
     
     # 2. ブラウザのWeb Speech APIを提案
     try:
@@ -41,45 +41,58 @@ def transcribe_audio_free(content: bytes, chunk_seconds: int = 30) -> List[Dict]
     return transcribe_with_stub(content, chunk_seconds)
 
 
-def transcribe_with_whisper_cpp(audio_data: bytes) -> List[Dict]:
-    """Whisper.cppを使用"""
-    whisper_exe = find_whisper_executable()
-    if not whisper_exe:
-        raise FileNotFoundError("Whisper.cpp not found")
-    
-    # 一時ファイルに保存
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-        temp_file.write(audio_data)
-        temp_audio_path = temp_file.name
-    
+def transcribe_with_python_whisper(audio_data: bytes) -> List[Dict]:
+    """Python版Whisperを使用"""
     try:
-        # Whisper.cppを実行
-        cmd = [
-            whisper_exe,
-            "-m", "models/ggml-base.bin",
-            "-f", temp_audio_path,
-            "-l", "ja",
-            "-t", "0.0",
-            "--output-json"
-        ]
+        import whisper
+        import tempfile
+        import os
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300,
-            cwd=os.path.dirname(whisper_exe)
-        )
+        # 一時ファイルに保存
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_file.write(audio_data)
+            temp_audio_path = temp_file.name
         
-        if result.returncode != 0:
-            raise RuntimeError(f"Whisper.cpp failed: {result.stderr}")
-        
-        # JSON結果をパース
-        result_data = json.loads(result.stdout)
-        return parse_whisper_result(result_data)
-        
-    finally:
-        os.unlink(temp_audio_path)
+        try:
+            # Whisperモデルをロード
+            model = whisper.load_model("tiny")
+            
+            # 音声を文字起こし
+            result = model.transcribe(temp_audio_path, language="ja")
+            
+            # 結果をフォーマット
+            chunks = []
+            if "segments" in result:
+                for segment in result["segments"]:
+                    chunk = {
+                        "text": segment.get("text", "").strip(),
+                        "start_sec": segment.get("start", 0.0),
+                        "end_sec": segment.get("end", 0.0),
+                        "speaker": None
+                    }
+                    chunks.append(chunk)
+            else:
+                chunk = {
+                    "text": result.get("text", "").strip(),
+                    "start_sec": 0.0,
+                    "end_sec": 0.0,
+                    "speaker": None
+                }
+                chunks.append(chunk)
+            
+            return chunks
+            
+        finally:
+            # 一時ファイルを削除
+            try:
+                os.unlink(temp_audio_path)
+            except:
+                pass
+                
+    except ImportError:
+        raise RuntimeError("openai-whisper is not installed. Run: pip install openai-whisper")
+    except Exception as e:
+        raise RuntimeError(f"Python版Whisper failed: {e}")
 
 
 def transcribe_with_browser_api(audio_data: bytes) -> List[Dict]:
@@ -130,53 +143,6 @@ def estimate_audio_duration(audio_data: bytes) -> float:
     
     # デフォルト値
     return 30.0
-
-
-def find_whisper_executable() -> str:
-    """Whisper.cppの実行ファイルを検索"""
-    # 環境変数から
-    whisper_path = os.getenv("WHISPER_EXECUTABLE_PATH")
-    if whisper_path and os.path.exists(whisper_path):
-        return whisper_path
-    
-    # 一般的な場所を検索
-    possible_paths = [
-        "./whisper-cpp/whisper.exe",
-        "./whisper/whisper.exe",
-        "./whisper.exe",
-        "whisper.exe"
-    ]
-    
-    for path in possible_paths:
-        if os.path.exists(path):
-            return path
-    
-    return None
-
-
-def parse_whisper_result(result: Dict[str, Any]) -> List[Dict]:
-    """Whisper.cppの結果をパース"""
-    chunks = []
-    
-    if "segments" in result:
-        for segment in result["segments"]:
-            chunk = {
-                "text": segment.get("text", "").strip(),
-                "start_sec": segment.get("start", 0.0),
-                "end_sec": segment.get("end", 0.0),
-                "speaker": None
-            }
-            chunks.append(chunk)
-    else:
-        chunk = {
-            "text": result.get("text", "").strip(),
-            "start_sec": 0.0,
-            "end_sec": 0.0,
-            "speaker": None
-        }
-        chunks.append(chunk)
-    
-    return chunks
 
 
 # メインのASR関数を更新
