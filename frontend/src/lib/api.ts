@@ -185,8 +185,9 @@ class ApiClient {
   }
 
   async deleteMeeting(id: string): Promise<void> {
-    // 実APIにDELETEがないため、現状はno-op。実装後に差し替え。
-    return Promise.resolve();
+    await this.request<void>(`/meetings/${id}`, {
+      method: "DELETE",
+    });
   }
 
   // アジェンダ管理

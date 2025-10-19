@@ -173,3 +173,21 @@ class DataStore:
         # 作成日時で降順ソート（新しい順）
         meetings.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return meetings
+
+    def delete_meeting(self, meeting_id: str):
+        """会議データを削除する
+
+        Args:
+            meeting_id: 会議ID
+
+        Raises:
+            FileNotFoundError: 会議データが存在しない場合
+        """
+        import shutil
+
+        meeting_dir = self._meeting_dir(meeting_id)
+        if not os.path.exists(meeting_dir):
+            raise FileNotFoundError(f"Meeting {meeting_id} not found")
+
+        # ディレクトリごと削除
+        shutil.rmtree(meeting_dir)

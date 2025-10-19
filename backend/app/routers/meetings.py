@@ -311,3 +311,25 @@ async def end_meeting(meeting_id: str, background_tasks: BackgroundTasks) -> Mee
 
     return Meeting(**_normalize_meeting_dict(meeting))
 
+
+@router.delete("/{meeting_id}", status_code=204)
+def delete_meeting(meeting_id: str) -> None:
+    """会議を削除する。
+
+    Args:
+        meeting_id: 会議ID
+
+    Raises:
+        HTTPException: 会議が見つからない場合
+    """
+    meeting = store.load_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+
+    try:
+        store.delete_meeting(meeting_id)
+        logger.info("Meeting deleted: %s", meeting_id)
+    except Exception as e:
+        logger.error("Failed to delete meeting %s: %s", meeting_id, e)
+        raise HTTPException(500, "Failed to delete meeting")
+
