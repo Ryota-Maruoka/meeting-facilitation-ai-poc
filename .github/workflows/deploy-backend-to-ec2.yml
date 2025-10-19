@@ -1,13 +1,14 @@
-name: Deploy Backend to EC2
+name: Deploy Backend to EC2 (SSH - DEPRECATED)
 
-# mainブランチへのpush時、またはbackend/配下の変更時に実行
+# このワークフローは非推奨です。SSM版を使用してください。
+# .github/workflows/deploy-backend-to-ec2-ssm.yml
 on:
   # push:
   #   branches:
   #     - main
   #   paths:
   #     - 'backend/**'
-  workflow_dispatch:  # 手動実行のみ有効（自動デプロイは無効化）
+  workflow_dispatch:  # 手動実行のみ（非推奨）
 
 jobs:
   deploy:

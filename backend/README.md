@@ -284,6 +284,34 @@ echo $OPENAI_API_KEY      # Linux/Mac
 - 脱線検知機能
 - Slack連携
 
+## 🚀 本番環境デプロイ
+
+### AWS EC2へのデプロイ
+
+本番環境（AWS EC2）へのデプロイ方法：
+
+**詳細ドキュメント**:
+- **[DEPLOY_AUTOMATION_SSM.md](./DEPLOY_AUTOMATION_SSM.md)** - SSM経由の自動デプロイ（推奨）
+- **[DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md)** - EC2環境のセットアップ
+- **[GITHUB_SECRETS_SSM.md](./GITHUB_SECRETS_SSM.md)** - GitHub Secretsの設定
+
+### クイックスタート
+
+1. **EC2セットアップ** → [DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md) を参照
+2. **IAMロール設定** → [DEPLOY_AUTOMATION_SSM.md](./DEPLOY_AUTOMATION_SSM.md) を参照
+3. **GitHub Secrets設定** → [GITHUB_SECRETS_SSM.md](./GITHUB_SECRETS_SSM.md) を参照
+4. **デプロイ実行**:
+   ```bash
+   git push origin main  # 自動デプロイ
+   ```
+
+### デプロイ方法
+
+- **自動デプロイ**: mainブランチへのpushで自動実行（GitHub Actions + AWS SSM）
+- **手動デプロイ**: GitHub Actionsから「Run workflow」で実行
+
+---
+
 ## 📄 ライセンス
 
 このプロジェクトはPoC（概念実証）です。
