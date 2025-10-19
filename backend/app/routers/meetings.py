@@ -141,8 +141,12 @@ def create_meeting(payload: dict) -> Meeting:
         logger.info("Meeting created successfully: %s", meeting_id)
         return Meeting(**meeting_data)
     except Exception as e:
-        logger.error("Failed to create meeting: %s", e)
-        raise
+        logger.error("Failed to create meeting: %s", e, exc_info=True)
+        # 詳細なエラー情報を返す
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to create meeting: {str(e)}"
+        )
 
 
 @router.get("/{meeting_id}", response_model=Meeting)
