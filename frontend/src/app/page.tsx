@@ -101,21 +101,38 @@ export default function MeetingHistoryPage() {
   // -----------------------------
   // ステート
   // -----------------------------
-  // 確定した検索条件（フィルタリングに使用）
-  const [statusFilter, setStatusFilter] = useState<"すべてのステータス" | Status>(
-    "すべてのステータス"
-  );
-  const [keyword, setKeyword] = useState<string>("");
-  const [dateRange, setDateRange] = useState<string>("");
-  const [dateRangeTo, setDateRangeTo] = useState<string>("");
+  // 確定した検索条件（フィルタリングに使用）- sessionStorageから復元
+  const [statusFilter, setStatusFilter] = useState<"すべてのステータス" | Status>(() => {
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("meetingHistory_statusFilter");
+      return (saved as "すべてのステータス" | Status) || "すべてのステータス";
+    }
+    return "すべてのステータス";
+  });
+  const [keyword, setKeyword] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("meetingHistory_keyword") || "";
+    }
+    return "";
+  });
+  const [dateRange, setDateRange] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("meetingHistory_dateRange") || "";
+    }
+    return "";
+  });
+  const [dateRangeTo, setDateRangeTo] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("meetingHistory_dateRangeTo") || "";
+    }
+    return "";
+  });
 
-  // 入力中の検索条件（一時的）
-  const [tempStatusFilter, setTempStatusFilter] = useState<"すべてのステータス" | Status>(
-    "すべてのステータス"
-  );
-  const [tempKeyword, setTempKeyword] = useState<string>("");
-  const [tempDateRange, setTempDateRange] = useState<string>("");
-  const [tempDateRangeTo, setTempDateRangeTo] = useState<string>("");
+  // 入力中の検索条件（一時的）- 確定値から初期化
+  const [tempStatusFilter, setTempStatusFilter] = useState<"すべてのステータス" | Status>(statusFilter);
+  const [tempKeyword, setTempKeyword] = useState<string>(keyword);
+  const [tempDateRange, setTempDateRange] = useState<string>(dateRange);
+  const [tempDateRangeTo, setTempDateRangeTo] = useState<string>(dateRangeTo);
 
   const [showCalendar, setShowCalendar] = useState<boolean>(false);
   const [calendarSelectionMode, setCalendarSelectionMode] = useState<"start" | "end" | null>(null);
@@ -254,6 +271,14 @@ export default function MeetingHistoryPage() {
     setTempDateRange("");
     setTempDateRangeTo("");
     setPage(1);
+
+    // sessionStorageからも削除
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("meetingHistory_statusFilter");
+      sessionStorage.removeItem("meetingHistory_keyword");
+      sessionStorage.removeItem("meetingHistory_dateRange");
+      sessionStorage.removeItem("meetingHistory_dateRangeTo");
+    }
   };
 
   const handleSearch = () => {
@@ -263,6 +288,14 @@ export default function MeetingHistoryPage() {
     setDateRange(tempDateRange);
     setDateRangeTo(tempDateRangeTo);
     setPage(1);
+
+    // sessionStorageに保存
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("meetingHistory_statusFilter", tempStatusFilter);
+      sessionStorage.setItem("meetingHistory_keyword", tempKeyword);
+      sessionStorage.setItem("meetingHistory_dateRange", tempDateRange);
+      sessionStorage.setItem("meetingHistory_dateRangeTo", tempDateRangeTo);
+    }
   };
 
   const handlePrev = () => setPage((p) => clamp(p - 1, 1, totalPages));
@@ -582,21 +615,35 @@ export default function MeetingHistoryPage() {
                             {ICONS.DOWNLOAD}
                           </span>
                           {dropdownOpen === row.id && (
-                            <div className="dropdown-menu">
-                              <button
-                                className="dropdown-item"
-                                onClick={() => handleDownload(row.id, "excel")}
-                              >
-                                {DOWNLOAD_FORMAT_LABELS.excel}
-                              </button>
-                              <div className="dropdown-divider"></div>
-                              <button
-                                className="dropdown-item"
-                                onClick={() => handleDownload(row.id, "audio")}
-                              >
-                                {DOWNLOAD_FORMAT_LABELS.audio}
-                              </button>
-                            </div>
+                            <>
+                              {/* 画面外クリック用の背景オーバーレイ */}
+                              <div
+                                style={{
+                                  position: "fixed",
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  zIndex: 99,
+                                }}
+                                onClick={() => setDropdownOpen(null)}
+                              />
+                              <div className="dropdown-menu">
+                                <button
+                                  className="dropdown-item"
+                                  onClick={() => handleDownload(row.id, "excel")}
+                                >
+                                  {DOWNLOAD_FORMAT_LABELS.excel}
+                                </button>
+                                <div className="dropdown-divider"></div>
+                                <button
+                                  className="dropdown-item"
+                                  onClick={() => handleDownload(row.id, "audio")}
+                                >
+                                  {DOWNLOAD_FORMAT_LABELS.audio}
+                                </button>
+                              </div>
+                            </>
                           )}
                         </div>
                         {/* 削除ボタン */}

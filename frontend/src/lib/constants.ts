@@ -8,7 +8,25 @@
 // 本番環境: Vercelリライト経由でEC2バックエンドにプロキシ (/backend-api → http://54.250.241.155:8000)
 // 開発環境: ローカルバックエンド (http://localhost:8000)
 // 環境変数 NEXT_PUBLIC_API_URL で上書き可能
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/backend-api";
+const getApiBaseUrl = () => {
+  // 環境変数で明示的に指定されている場合はそれを使用
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  // ブラウザ環境でのみ動作する判定
+  if (typeof window !== 'undefined') {
+    // ローカル開発環境の判定 (localhost または 127.0.0.1)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+  }
+
+  // 本番環境またはサーバーサイド: Vercelリライト経由
+  return '/backend-api';
+};
+
+export const API_BASE_URL = getApiBaseUrl();
 
 // 会議設定
 export const MAX_MEETING_DURATION_MINUTES = 180;

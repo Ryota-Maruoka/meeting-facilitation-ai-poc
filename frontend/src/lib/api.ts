@@ -90,7 +90,7 @@ class ApiClient {
 
     // FormDataの場合はContent-Typeを自動設定に任せる
     const isFormData = options?.body instanceof FormData;
-    const headers = isFormData 
+    const headers = isFormData
       ? { ...options?.headers }
       : {
           "Content-Type": "application/json",
@@ -107,7 +107,25 @@ class ApiClient {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      // レスポンスボディが空の場合（204 No Content等）はJSONパースをスキップ
+      const contentLength = response.headers.get("content-length");
+      const contentType = response.headers.get("content-type");
+
+      if (
+        response.status === 204 ||
+        contentLength === "0" ||
+        (!contentType?.includes("application/json"))
+      ) {
+        return undefined as T;
+      }
+
+      // レスポンステキストを確認してから判断
+      const text = await response.text();
+      if (!text || text.trim() === "") {
+        return undefined as T;
+      }
+
+      return JSON.parse(text) as T;
     } catch (error) {
       console.error("API request failed:", error);
       throw error;

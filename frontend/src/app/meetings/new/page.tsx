@@ -75,6 +75,7 @@ function MeetingCreationForm() {
   ]);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [cancelModalOpen, setCancelModalOpen] = useState<boolean>(false);
+  const [isCreatingMeeting, setIsCreatingMeeting] = useState<boolean>(false);
 
   // カレンダー関連のステート
   const [showCalendar, setShowCalendar] = useState<boolean>(false);
@@ -264,6 +265,9 @@ function MeetingCreationForm() {
       return;
     }
 
+    // ローディング状態を開始
+    setIsCreatingMeeting(true);
+
     try {
       // バックエンドAPIで会議を作成（既存のIDを使用）
       const meeting = await apiClient.createMeetingWithId({
@@ -294,15 +298,13 @@ function MeetingCreationForm() {
       };
       sessionStorage.setItem("currentMeeting", JSON.stringify(meetingData));
 
-      // 会議進行中画面に遷移
-      showSuccess("会議を開始しました");
-      setTimeout(() => {
-        router.push(`/meetings/${meetingId}/active`);
-      }, 500);
+      // 会議進行中画面に遷移（ローディング状態は遷移先で自動的に解除される）
+      router.push(`/meetings/${meetingId}/active`);
 
     } catch (error) {
       console.error("Failed to create meeting:", error);
       showError("会議の作成に失敗しました");
+      setIsCreatingMeeting(false); // エラー時はローディング状態を解除
     }
   };
 
@@ -363,6 +365,11 @@ function MeetingCreationForm() {
         .form-label-required::after {
           content: " *";
           color: #F44336;
+        }
+        /* スピナーアニメーション */
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
       <div className="page-container">
@@ -678,6 +685,49 @@ function MeetingCreationForm() {
               <button className="btn btn-danger" onClick={handleCancelConfirm}>
                 破棄して戻る
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 会議作成中ローディング */}
+      {isCreatingMeeting && (
+        <div className="modal-overlay" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)" }}>
+          <div style={{
+            backgroundColor: "#fff",
+            borderRadius: "8px",
+            padding: "32px 48px",
+            textAlign: "center",
+            maxWidth: "400px",
+            margin: "0 auto"
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "20px"
+            }}>
+              <div className="spinner" style={{
+                width: "48px",
+                height: "48px",
+                border: "4px solid #E0E0E0",
+                borderTop: "4px solid #2196F3",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite"
+              }} />
+            </div>
+            <div style={{
+              fontSize: "18px",
+              fontWeight: "500",
+              color: "#212121",
+              marginBottom: "8px"
+            }}>
+              会議を作成しています
+            </div>
+            <div style={{
+              fontSize: "14px",
+              color: "#757575"
+            }}>
+              少々お待ちください。
             </div>
           </div>
         </div>

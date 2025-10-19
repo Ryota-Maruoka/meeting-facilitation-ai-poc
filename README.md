@@ -250,7 +250,55 @@ cp data/meetings/meetings.sample.json data/meetings/meetings.json
 npm run dev
 ```
 
-### 6. アクセス確認
+### 6. 一括起動（推奨）
+
+フロントエンドとバックエンドを同時に起動する便利なスクリプトを用意しています。
+
+#### Windows (PowerShell)
+```powershell
+# PowerShellスクリプトを実行
+.\local-run.ps1
+
+# またはバッチファイルをダブルクリック
+.\local-run.bat
+```
+
+#### Git Bash / WSL / macOS / Linux
+```bash
+# 実行権限を付与（初回のみ）
+chmod +x local-run.sh
+
+# スクリプトを実行
+./local-run.sh
+```
+
+**起動されるサービス:**
+- バックエンドAPI: http://localhost:8000
+- フロントエンド: http://localhost:3000
+
+**終了方法:**
+- PowerShell版: 各ウィンドウで `Ctrl+C` を押す
+- Bash版: スクリプト実行中のターミナルで `Ctrl+C` を押す
+
+### 7. 個別起動
+
+一括起動スクリプトを使わない場合は、以下のように個別に起動します。
+
+#### バックエンド起動
+```bash
+cd backend
+.\.venv\Scripts\Activate.ps1  # Windows
+# source .venv/bin/activate   # macOS/Linux
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+#### フロントエンド起動
+```bash
+cd frontend
+npm run dev
+```
+
+### 8. アクセス確認
 
 - **バックエンドAPI**: http://localhost:8000/docs
 - **フロントエンド**: http://localhost:3000
