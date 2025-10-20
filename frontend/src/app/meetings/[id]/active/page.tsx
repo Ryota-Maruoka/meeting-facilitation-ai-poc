@@ -31,13 +31,13 @@
  * - shared/lib/types.ts - 型定義
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
-import LiveTranscriptArea from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
+import LiveTranscriptArea, { LiveTranscriptAreaHandle } from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
 import DeviationAlert from "@/components/sections/DeviationAlert";
 import { useDeviationDetection } from "@/hooks/useDeviationDetection";
 import { apiClient } from "@/lib/api";
@@ -78,13 +78,14 @@ export default function MeetingActivePage() {
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
+  const transcriptRef = useRef<LiveTranscriptAreaHandle | null>(null);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
 
   // 脱線検知機能
   const {
-    currentAlert,
+    alerts,
     isCheckingDeviation,
     consecutiveDeviations,
     checkDeviation,
@@ -92,6 +93,8 @@ export default function MeetingActivePage() {
     handleReturnToAgenda,
     handleAddToParkingLot,
     handleIgnoreDeviation,
+    clearAllAlerts,
+    addTestAlert,
   } = useDeviationDetection({
     meetingId,
     transcripts,
@@ -242,20 +245,20 @@ export default function MeetingActivePage() {
   // -----------------------------
   // イベントハンドラ
   // -----------------------------
-  const handleDeviationMarkAsRelated = () => {
-    handleMarkAsRelated();
+  const handleDeviationMarkAsRelated = (alertId: string) => {
+    handleMarkAsRelated(alertId);
     showSuccess("アジェンダに関連しているとマークしました");
   };
 
-  const handleDeviationReturnToAgenda = () => {
-    handleReturnToAgenda();
+  const handleDeviationReturnToAgenda = (alertId: string) => {
+    handleReturnToAgenda(alertId);
     showSuccess("軌道修正して議題に戻しました");
   };
 
-  const handleDeviationAddToParkingLot = async (topic: string) => {
+  const handleDeviationAddToParkingLot = async (alertId: string, topic: string) => {
     try {
       await apiClient.addParkingItem(meetingId, topic);
-      handleAddToParkingLot(topic);
+      handleAddToParkingLot(alertId, topic);
       setParkingLot([...parkingLot, topic]);
       showSuccess("保留事項に追加しました");
     } catch (error) {
@@ -264,8 +267,8 @@ export default function MeetingActivePage() {
     }
   };
 
-  const handleDeviationIgnore = () => {
-    handleIgnoreDeviation();
+  const handleDeviationIgnore = (alertId: string) => {
+    handleIgnoreDeviation(alertId);
     showSuccess("脱線アラートを無視しました");
   };
 
@@ -291,7 +294,7 @@ export default function MeetingActivePage() {
     }
   };
 
-  const handleEndMeetingConfirm = () => {
+  const handleEndMeetingConfirm = async () => {
     // 会議終了時に会議レポート用のデータを保存
     if (meetingData && meetingStartTime) {
       // 経過時間を計算（分単位）
@@ -316,9 +319,25 @@ export default function MeetingActivePage() {
     }
 
     console.log("会議終了:", meetingId);
+    // ローディング表示開始
+    setIsEndingMeeting(true);
     setEndModalOpen(false);
-    // 即座に画面遷移（文字起こし処理の完了を待たない）
-    router.push(`/meetings/${meetingId}/summary`);
+
+    try {
+      // 1) 録音停止＆最後のチャンク送信・文字起こし完了まで待機
+      if (transcriptRef.current) {
+        await transcriptRef.current.stopAndFlush();
+      }
+
+      // 2) 会議終了 → 要約生成を順に実行
+      await apiClient.endMeeting(meetingId);
+      await apiClient.generateSummary(meetingId);
+    } catch (error) {
+      console.error("会議終了処理に失敗:", error);
+    } finally {
+      // サマリ画面へ遷移
+      router.push(`/meetings/${meetingId}/summary`);
+    }
   };
 
   const handleEndModalClose = () => {
@@ -516,6 +535,7 @@ export default function MeetingActivePage() {
             </div>
             <div className="section-content">
               <LiveTranscriptArea
+                ref={transcriptRef}
                 meetingId={meetingId}
                 onTranscriptsUpdate={handleTranscriptsUpdate}
                 autoStart={isMeetingStarted}
@@ -547,21 +567,55 @@ export default function MeetingActivePage() {
               <div className="section-header">
                 <span className="material-icons icon-sm">{ICONS.ALERT}</span>
                 <span>脱線検知アラート</span>
+                {alerts.length > 0 && (
+                  <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
+                    ({alerts.length}件)
+                  </span>
+                )}
                 {isCheckingDeviation && (
                   <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
                     (検知中...)
                   </span>
                 )}
+                {/* 🧪 テスト用アラート追加ボタン（開発時のみ） */}
+                {process.env.NODE_ENV === "development" && (
+                  <button 
+                    className="btn btn-sm" 
+                    style={{ marginLeft: "auto" }}
+                    onClick={() => addTestAlert()}
+                  >
+                    テストアラート追加
+                  </button>
+                )}
               </div>
-              <div className="section-content">
-                {currentAlert ? (
-                  <DeviationAlert
-                    alert={currentAlert}
-                    onMarkAsRelated={handleDeviationMarkAsRelated}
-                    onReturnToAgenda={handleDeviationReturnToAgenda}
-                    onAddToParkingLot={handleDeviationAddToParkingLot}
-                    onDismiss={handleDeviationIgnore}
-                  />
+              <div className="section-content alerts-container">
+                {alerts.length > 0 ? (
+                  <div className="alerts-list">
+                    {alerts.map((alert) => (
+                      <div key={alert.id} className="alert-item">
+                        <DeviationAlert
+                          alert={alert}
+                          onMarkAsRelated={() => handleDeviationMarkAsRelated(alert.id)}
+                          onReturnToAgenda={() => handleDeviationReturnToAgenda(alert.id)}
+                          onAddToParkingLot={(topic) => handleDeviationAddToParkingLot(alert.id, topic)}
+                          onDismiss={() => handleDeviationIgnore(alert.id)}
+                        />
+                        <div className="alert-timestamp">
+                          {new Date(alert.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))}
+                    {alerts.length > 3 && (
+                      <div className="alerts-clear-all">
+                        <button 
+                          className="btn btn-sm btn-outline" 
+                          onClick={clearAllAlerts}
+                        >
+                          すべてクリア
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="empty-state">
                     脱線は検知されていません
@@ -585,6 +639,7 @@ export default function MeetingActivePage() {
                   }}>
                     文字起こし数: {transcripts.length} | 
                     連続脱線: {consecutiveDeviations} | 
+                    アラート数: {alerts.length} |
                     検知中: {isCheckingDeviation ? "Yes" : "No"}
                   </div>
                 )}
@@ -684,6 +739,49 @@ export default function MeetingActivePage() {
               >
                 {isEndingMeeting ? "終了中..." : "終了してレポートへ"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 会議終了処理中ローディング（レポート生成中） */}
+      {isEndingMeeting && (
+        <div className="modal-overlay" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)" }}>
+          <div style={{
+            backgroundColor: "#fff",
+            borderRadius: "8px",
+            padding: "32px 48px",
+            textAlign: "center",
+            maxWidth: "420px",
+            margin: "0 auto"
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "20px"
+            }}>
+              <div className="spinner" style={{
+                width: "48px",
+                height: "48px",
+                border: "4px solid #E0E0E0",
+                borderTop: "4px solid #4CAF50",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite"
+              }} />
+            </div>
+            <div style={{
+              fontSize: "18px",
+              fontWeight: "500",
+              color: "#212121",
+              marginBottom: "8px"
+            }}>
+              レポートを生成しています。
+            </div>
+            <div style={{
+              fontSize: "14px",
+              color: "#757575"
+            }}>
+              少々お待ちください。
             </div>
           </div>
         </div>

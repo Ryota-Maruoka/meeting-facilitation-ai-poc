@@ -7,3 +7,77 @@
 /* simple utility tokens for ★ and ◇ labels */
 .badge-star::after { content: "★"; @apply ml-1 text-amber-500; }
 .badge-diamond::after { content: "◇"; @apply ml-1 text-sky-500; }
+
+/* 脱線検知アラートのスクロール可能エリア */
+.alerts-container {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.alerts-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alerts-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.alerts-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.alerts-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.alert-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafafa;
+  position: relative;
+}
+
+.alert-item:last-child {
+  margin-bottom: 0;
+}
+
+.alert-timestamp {
+  font-size: 10px;
+  color: #666;
+  text-align: right;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.alerts-clear-all {
+  text-align: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid #ccc;
+  color: #666;
+}
+
+.btn-outline:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
