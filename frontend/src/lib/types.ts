@@ -90,7 +90,7 @@ export type ParkingLotItem = {
 
 // 脱線検知アラート
 export type DeviationAlert = {
-  id?: string;
+  id: string;
   is_deviation: boolean;
   confidence: number;
   similarity: number; // similarity_score から similarity に変更
@@ -99,6 +99,7 @@ export type DeviationAlert = {
   suggestedTopics: string[]; // suggested_agenda から suggestedTopics に変更
   recent_text: string;
   created_at: string; // timestamp から created_at に変更
+  timestamp: string; // アラート生成時刻を追加
 };
 
 // 会議後サマリ

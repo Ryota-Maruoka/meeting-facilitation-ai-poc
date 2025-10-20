@@ -84,7 +84,7 @@ export default function MeetingActivePage() {
 
   // 脱線検知機能
   const {
-    currentAlert,
+    alerts,
     isCheckingDeviation,
     consecutiveDeviations,
     checkDeviation,
@@ -92,6 +92,8 @@ export default function MeetingActivePage() {
     handleReturnToAgenda,
     handleAddToParkingLot,
     handleIgnoreDeviation,
+    clearAllAlerts,
+    addTestAlert,
   } = useDeviationDetection({
     meetingId,
     transcripts,
@@ -242,20 +244,20 @@ export default function MeetingActivePage() {
   // -----------------------------
   // イベントハンドラ
   // -----------------------------
-  const handleDeviationMarkAsRelated = () => {
-    handleMarkAsRelated();
+  const handleDeviationMarkAsRelated = (alertId: string) => {
+    handleMarkAsRelated(alertId);
     showSuccess("アジェンダに関連しているとマークしました");
   };
 
-  const handleDeviationReturnToAgenda = () => {
-    handleReturnToAgenda();
+  const handleDeviationReturnToAgenda = (alertId: string) => {
+    handleReturnToAgenda(alertId);
     showSuccess("軌道修正して議題に戻しました");
   };
 
-  const handleDeviationAddToParkingLot = async (topic: string) => {
+  const handleDeviationAddToParkingLot = async (alertId: string, topic: string) => {
     try {
       await apiClient.addParkingItem(meetingId, topic);
-      handleAddToParkingLot(topic);
+      handleAddToParkingLot(alertId, topic);
       setParkingLot([...parkingLot, topic]);
       showSuccess("保留事項に追加しました");
     } catch (error) {
@@ -264,8 +266,8 @@ export default function MeetingActivePage() {
     }
   };
 
-  const handleDeviationIgnore = () => {
-    handleIgnoreDeviation();
+  const handleDeviationIgnore = (alertId: string) => {
+    handleIgnoreDeviation(alertId);
     showSuccess("脱線アラートを無視しました");
   };
 
@@ -547,21 +549,55 @@ export default function MeetingActivePage() {
               <div className="section-header">
                 <span className="material-icons icon-sm">{ICONS.ALERT}</span>
                 <span>脱線検知アラート</span>
+                {alerts.length > 0 && (
+                  <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
+                    ({alerts.length}件)
+                  </span>
+                )}
                 {isCheckingDeviation && (
                   <span style={{ fontSize: "12px", color: "#666", marginLeft: "8px" }}>
                     (検知中...)
                   </span>
                 )}
+                {/* 🧪 テスト用アラート追加ボタン（開発時のみ） */}
+                {process.env.NODE_ENV === "development" && (
+                  <button 
+                    className="btn btn-sm" 
+                    style={{ marginLeft: "auto" }}
+                    onClick={() => addTestAlert()}
+                  >
+                    テストアラート追加
+                  </button>
+                )}
               </div>
-              <div className="section-content">
-                {currentAlert ? (
-                  <DeviationAlert
-                    alert={currentAlert}
-                    onMarkAsRelated={handleDeviationMarkAsRelated}
-                    onReturnToAgenda={handleDeviationReturnToAgenda}
-                    onAddToParkingLot={handleDeviationAddToParkingLot}
-                    onDismiss={handleDeviationIgnore}
-                  />
+              <div className="section-content alerts-container">
+                {alerts.length > 0 ? (
+                  <div className="alerts-list">
+                    {alerts.map((alert) => (
+                      <div key={alert.id} className="alert-item">
+                        <DeviationAlert
+                          alert={alert}
+                          onMarkAsRelated={() => handleDeviationMarkAsRelated(alert.id)}
+                          onReturnToAgenda={() => handleDeviationReturnToAgenda(alert.id)}
+                          onAddToParkingLot={(topic) => handleDeviationAddToParkingLot(alert.id, topic)}
+                          onDismiss={() => handleDeviationIgnore(alert.id)}
+                        />
+                        <div className="alert-timestamp">
+                          {new Date(alert.timestamp).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    ))}
+                    {alerts.length > 3 && (
+                      <div className="alerts-clear-all">
+                        <button 
+                          className="btn btn-sm btn-outline" 
+                          onClick={clearAllAlerts}
+                        >
+                          すべてクリア
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="empty-state">
                     脱線は検知されていません
@@ -585,6 +621,7 @@ export default function MeetingActivePage() {
                   }}>
                     文字起こし数: {transcripts.length} | 
                     連続脱線: {consecutiveDeviations} | 
+                    アラート数: {alerts.length} |
                     検知中: {isCheckingDeviation ? "Yes" : "No"}
                   </div>
                 )}

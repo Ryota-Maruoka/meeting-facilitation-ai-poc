@@ -16,14 +16,16 @@ type UseDeviationDetectionProps = {
 };
 
 type UseDeviationDetectionReturn = {
-  currentAlert: DeviationAlert | null;
+  alerts: DeviationAlert[]; // 複数のアラートを管理
   isCheckingDeviation: boolean;
   consecutiveDeviations: number;
   checkDeviation: () => Promise<void>;
-  handleMarkAsRelated: () => void;
-  handleReturnToAgenda: () => void;
-  handleAddToParkingLot: (topic: string) => void;
-  handleIgnoreDeviation: () => void;
+  handleMarkAsRelated: (alertId: string) => void;
+  handleReturnToAgenda: (alertId: string) => void;
+  handleAddToParkingLot: (alertId: string, topic: string) => void;
+  handleIgnoreDeviation: (alertId: string) => void;
+  clearAllAlerts: () => void;
+  addTestAlert: (override?: Partial<DeviationAlert>) => void; // 🧪 テスト用アラート追加
 };
 
 /**
@@ -37,7 +39,7 @@ export const useDeviationDetection = ({
   transcripts,
   isMeetingStarted,
 }: UseDeviationDetectionProps): UseDeviationDetectionReturn => {
-  const [currentAlert, setCurrentAlert] = useState<DeviationAlert | null>(null);
+  const [alerts, setAlerts] = useState<DeviationAlert[]>([]); // 複数のアラートを管理
   const [isCheckingDeviation, setIsCheckingDeviation] = useState(false);
   const [consecutiveDeviations, setConsecutiveDeviations] = useState(0);
   const [lastCheckedCount, setLastCheckedCount] = useState(0);
@@ -58,9 +60,15 @@ export const useDeviationDetection = ({
         console.log("⚠️ 脱線を検知:", deviationResult);
         setConsecutiveDeviations(prev => prev + 1);
         
-        // 連続して2回以上脱線が検知された場合のみアラートを表示
+        // TODO: 何回以上か検討
+        // 連続して2回以上脱線が検知された場合のみアラートを追加
         if (consecutiveDeviations >= 1) {
-          setCurrentAlert(deviationResult);
+          const newAlert: DeviationAlert = {
+            ...deviationResult,
+            id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date().toISOString(),
+          };
+          setAlerts(prev => [...prev, newAlert]);
         }
       } else {
         console.log("✅ アジェンダに沿った発話:", deviationResult);
@@ -90,35 +98,60 @@ export const useDeviationDetection = ({
   }, [transcripts.length, lastCheckedCount, isMeetingStarted, checkDeviation]);
 
   // 脱線アラートのアクション処理
-  const handleMarkAsRelated = useCallback(() => {
-    console.log("アジェンダに関連しているとマーク");
-    setCurrentAlert(null);
+  const handleMarkAsRelated = useCallback((alertId: string) => {
+    console.log("アジェンダに関連しているとマーク:", alertId);
+    setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
     // TODO: AIの学習データに「関連」として記録
   }, []);
 
-  const handleReturnToAgenda = useCallback(() => {
-    console.log("軌道修正して議題に戻す");
-    setCurrentAlert(null);
+  const handleReturnToAgenda = useCallback((alertId: string) => {
+    console.log("軌道修正して議題に戻す:", alertId);
+    setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
     // TODO: 実際の議題に戻す処理を実装
   }, []);
 
-  const handleAddToParkingLot = useCallback((topic: string) => {
-    console.log("保留事項に追加:", topic);
-    setCurrentAlert(null);
+  const handleAddToParkingLot = useCallback((alertId: string, topic: string) => {
+    console.log("保留事項に追加:", alertId, topic);
+    setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
     // TODO: 保留事項に追加する処理を実装
   }, []);
 
-  const handleIgnoreDeviation = useCallback(() => {
-    console.log("脱線を無視");
-    setCurrentAlert(null);
+  const handleIgnoreDeviation = useCallback((alertId: string) => {
+    console.log("脱線を無視:", alertId);
+    setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
   }, []);
 
+  const clearAllAlerts = useCallback(() => {
+    console.log("すべてのアラートをクリア");
+    setAlerts([]);
+    setConsecutiveDeviations(0);
+  }, []);
+
+  // 🧪 テスト用: ダミーの脱線アラートを手動で追加
+  const addTestAlert = useCallback((override?: Partial<DeviationAlert>) => {
+    const now = new Date().toISOString();
+    const base: DeviationAlert = {
+      id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      is_deviation: true,
+      confidence: 0.87,
+      similarity: 0.22,
+      best_agenda: "JWT方式の検討",
+      message: "直近の会話がアジェンダから逸脱している可能性があります",
+      suggestedTopics: ["認証方式の比較に戻る", "セキュリティ要件の確認"],
+      recent_text: "昨日の野球の試合が…",
+      created_at: now,
+      timestamp: now,
+    };
+    const alert = { ...base, ...override, id: base.id };
+    setAlerts(prev => [...prev, alert]);
+  }, []);
+
   return {
-    currentAlert,
+    alerts,
     isCheckingDeviation,
     consecutiveDeviations,
     checkDeviation,
@@ -126,5 +159,7 @@ export const useDeviationDetection = ({
     handleReturnToAgenda,
     handleAddToParkingLot,
     handleIgnoreDeviation,
+    clearAllAlerts,
+    addTestAlert,
   };
 };
