@@ -364,7 +364,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
 
   return (
     <Card sx={{ height: "500px", display: "flex", flexDirection: "column" }}>
-      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "auto", p: 2 }}>
+      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", p: 2 }}>
       {/* エラー表示 */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -379,7 +379,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
           flexGrow: 1,
           p: 2,
           backgroundColor: "grey.50",
-          overflow: "visible",
+          overflow: "auto",
         }}
       >
         {transcripts.length === 0 ? (
