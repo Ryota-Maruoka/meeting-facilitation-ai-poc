@@ -293,7 +293,7 @@ export default function MeetingActivePage() {
     }
   };
 
-  const handleEndMeetingConfirm = () => {
+  const handleEndMeetingConfirm = async () => {
     // 会議終了時に会議レポート用のデータを保存
     if (meetingData && meetingStartTime) {
       // 経過時間を計算（分単位）
@@ -318,9 +318,20 @@ export default function MeetingActivePage() {
     }
 
     console.log("会議終了:", meetingId);
+    // ローディング表示開始
+    setIsEndingMeeting(true);
     setEndModalOpen(false);
-    // 即座に画面遷移（文字起こし処理の完了を待たない）
-    router.push(`/meetings/${meetingId}/summary`);
+
+    try {
+      // 会議終了 → 要約生成を順に実行
+      await apiClient.endMeeting(meetingId);
+      await apiClient.generateSummary(meetingId);
+    } catch (error) {
+      console.error("会議終了処理に失敗:", error);
+    } finally {
+      // サマリ画面へ遷移
+      router.push(`/meetings/${meetingId}/summary`);
+    }
   };
 
   const handleEndModalClose = () => {
@@ -721,6 +732,49 @@ export default function MeetingActivePage() {
               >
                 {isEndingMeeting ? "終了中..." : "終了してレポートへ"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 会議終了処理中ローディング（レポート生成中） */}
+      {isEndingMeeting && (
+        <div className="modal-overlay" style={{ backgroundColor: "rgba(0, 0, 0, 0.7)" }}>
+          <div style={{
+            backgroundColor: "#fff",
+            borderRadius: "8px",
+            padding: "32px 48px",
+            textAlign: "center",
+            maxWidth: "420px",
+            margin: "0 auto"
+          }}>
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: "20px"
+            }}>
+              <div className="spinner" style={{
+                width: "48px",
+                height: "48px",
+                border: "4px solid #E0E0E0",
+                borderTop: "4px solid #4CAF50",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite"
+              }} />
+            </div>
+            <div style={{
+              fontSize: "18px",
+              fontWeight: "500",
+              color: "#212121",
+              marginBottom: "8px"
+            }}>
+              レポートを生成しています。
+            </div>
+            <div style={{
+              fontSize: "14px",
+              color: "#757575"
+            }}>
+              少々お待ちください。
             </div>
           </div>
         </div>
