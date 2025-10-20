@@ -23,6 +23,7 @@ import type {
   MeetingSummary,
   ApiResponse,
   UnresolvedItem,
+  MeetingDetailPreview,
 } from "./types";
 
 class ApiClient {
@@ -386,6 +387,13 @@ class ApiClient {
   async generateSummary(meetingId: string): Promise<any> {
     return this.request<any>(`/meetings/${meetingId}/summary/generate`, {
       method: "POST",
+    });
+  }
+
+  // プレビューパネル用の会議詳細取得(要約・決定事項・アクション)
+  async getMeetingDetailPreview(meetingId: string): Promise<MeetingDetailPreview> {
+    return this.request<MeetingDetailPreview>(`/meetings/${meetingId}/summary`, {
+      method: "GET",
     });
   }
 }

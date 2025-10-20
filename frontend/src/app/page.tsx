@@ -34,7 +34,7 @@ import { ICONS, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
 import { apiClient } from "@/lib/api";
-import type { Meeting } from "@/lib/types";
+import type { Meeting, MeetingDetailPreview } from "@/lib/types";
 
 export default function MeetingHistoryPage() {
   const router = useRouter();
@@ -141,6 +141,11 @@ export default function MeetingHistoryPage() {
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
   const [deletingMeeting, setDeletingMeeting] = useState<DisplayMeeting | null>(null);
+
+  // プレビューパネル用の状態
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const [previewDetail, setPreviewDetail] = useState<MeetingDetailPreview | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState<boolean>(false);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
@@ -398,16 +403,42 @@ export default function MeetingHistoryPage() {
     setCalendarSelectionMode(null);
   };
 
+  // プレビューパネル関連のハンドラ
+  const handleRowClick = async (meeting: DisplayMeeting) => {
+    // 完了済みの会議のみプレビュー表示
+    if (meeting.status !== "完了") {
+      return;
+    }
+
+    setSelectedMeetingId(meeting.id);
+    setIsLoadingPreview(true);
+
+    try {
+      const detail = await apiClient.getMeetingDetailPreview(meeting.id);
+      setPreviewDetail(detail);
+    } catch (error) {
+      console.error("Failed to load preview:", error);
+      setPreviewDetail(null);
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    setSelectedMeetingId(null);
+    setPreviewDetail(null);
+  };
+
   // -----------------------------
   // レンダリング
   // -----------------------------
   return (
-    <div className="page">
+    <div className="page meeting-history-page">
       <style suppressHydrationWarning>{commonStyles}</style>
       <div className="page-container">
         {/* ヘッダー */}
         <div className="meeting-header">
-          <div className="meeting-title">議事録履歴一覧</div>
+          <div className="meeting-title">会議履歴一覧</div>
         </div>
 
         {/* ボディコンテンツ */}
@@ -574,107 +605,243 @@ export default function MeetingHistoryPage() {
           </button>
         </div>
 
-        {/* データグリッド */}
-        <div className="table-wrap">
-          <table className="data-grid">
-            <thead>
-              <tr>
-                <th>日付</th>
-                <th>会議名</th>
-                <th>参加者</th>
-                <th>ステータス</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.length === 0 ? (
+        {/* データグリッドとプレビューパネルのコンテナ */}
+        <div className="meeting-history-container">
+          {/* プレビュー表示時のオーバーレイ(背景クリックで閉じる) */}
+          {selectedMeetingId && (
+            <div
+              className="preview-overlay"
+              onClick={handleClosePreview}
+            />
+          )}
+
+          {/* 左側: データグリッド */}
+          <div className={`table-wrap ${selectedMeetingId ? "with-preview" : ""}`}>
+            <table className="data-grid">
+              <thead>
                 <tr>
-                  <td colSpan={5} style={{ textAlign: "center", padding: "40px" }}>
-                    <span className="text-secondary">該当するデータがありません。</span>
-                  </td>
+                  <th>日付</th>
+                  <th>会議名</th>
+                  <th>参加者</th>
+                  <th>ステータス</th>
+                  <th>操作</th>
                 </tr>
-              ) : (
-                pageRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>{formatDate(row.meetingDate)}</td>
-                    <td>
-                      <a
-                        className="title-link"
-                        onClick={() => handleTitleClick(row)}
-                      >
-                        {row.title}
-                      </a>
+              </thead>
+              <tbody>
+                {pageRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "40px" }}>
+                      <span className="text-secondary">該当するデータがありません。</span>
                     </td>
-                    <td>{row.participants}</td>
-                    <td>
-                      <span
-                        className={`badge ${
-                          row.status === "完了" ? "badge-success" : "badge-default"
-                        }`}
-                      >
-                        {row.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="ops">
-                        {/* ダウンロードボタン(プルダウン) */}
-                        <div className="dropdown">
+                  </tr>
+                ) : (
+                  pageRows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={`${row.status === "完了" ? "clickable-row" : ""} ${selectedMeetingId === row.id ? "selected-row" : ""}`}
+                      onClick={() => row.status === "完了" && handleRowClick(row)}
+                    >
+                      <td>{formatDate(row.meetingDate)}</td>
+                      <td>
+                        <a
+                          className="title-link"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTitleClick(row);
+                          }}
+                        >
+                          {row.title}
+                        </a>
+                      </td>
+                      <td>{row.participants}</td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            row.status === "完了" ? "badge-success" : "badge-default"
+                          }`}
+                        >
+                          {row.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="ops">
+                          {/* ダウンロードボタン(プルダウン) */}
+                          <div className="dropdown">
+                            <span
+                              className="icon material-icons icon-sm"
+                              role="button"
+                              aria-label="ダウンロード"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleDropdown(row.id);
+                              }}
+                            >
+                              {ICONS.DOWNLOAD}
+                            </span>
+                            {dropdownOpen === row.id && (
+                              <>
+                                {/* 画面外クリック用の背景オーバーレイ */}
+                                <div
+                                  style={{
+                                    position: "fixed",
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    zIndex: 99,
+                                  }}
+                                  onClick={() => setDropdownOpen(null)}
+                                />
+                                <div className="dropdown-menu">
+                                  <button
+                                    className="dropdown-item"
+                                    onClick={() => handleDownload(row.id, "excel")}
+                                  >
+                                    {DOWNLOAD_FORMAT_LABELS.excel}
+                                  </button>
+                                  <div className="dropdown-divider"></div>
+                                  <button
+                                    className="dropdown-item"
+                                    onClick={() => handleDownload(row.id, "audio")}
+                                  >
+                                    {DOWNLOAD_FORMAT_LABELS.audio}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          {/* 削除ボタン */}
                           <span
                             className="icon material-icons icon-sm"
                             role="button"
-                            aria-label="ダウンロード"
-                            onClick={() => toggleDropdown(row.id)}
+                            aria-label="削除"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteClick(row);
+                            }}
                           >
-                            {ICONS.DOWNLOAD}
+                            {ICONS.TRASH}
                           </span>
-                          {dropdownOpen === row.id && (
-                            <>
-                              {/* 画面外クリック用の背景オーバーレイ */}
-                              <div
-                                style={{
-                                  position: "fixed",
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  zIndex: 99,
-                                }}
-                                onClick={() => setDropdownOpen(null)}
-                              />
-                              <div className="dropdown-menu">
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => handleDownload(row.id, "excel")}
-                                >
-                                  {DOWNLOAD_FORMAT_LABELS.excel}
-                                </button>
-                                <div className="dropdown-divider"></div>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => handleDownload(row.id, "audio")}
-                                >
-                                  {DOWNLOAD_FORMAT_LABELS.audio}
-                                </button>
-                              </div>
-                            </>
-                          )}
                         </div>
-                        {/* 削除ボタン */}
-                        <span
-                          className="icon material-icons icon-sm"
-                          role="button"
-                          aria-label="削除"
-                          onClick={() => handleDeleteClick(row)}
-                        >
-                          {ICONS.TRASH}
-                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 右側: プレビューパネル */}
+          {selectedMeetingId && (
+            <div className="preview-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="preview-header">
+                <h3 className="preview-title">
+                  {pageRows.find(m => m.id === selectedMeetingId)?.title || "会議詳細"}
+                </h3>
+                <button
+                  className="preview-close-btn"
+                  onClick={handleClosePreview}
+                  aria-label="プレビューを閉じる"
+                >
+                  <span className="material-icons icon-sm">{ICONS.CLOSE}</span>
+                </button>
+              </div>
+
+              <div className="preview-body">
+                {isLoadingPreview ? (
+                  <div className="preview-loading">
+                    <div className="spinner"></div>
+                    <p>読み込み中...</p>
+                  </div>
+                ) : previewDetail ? (
+                  <>
+                    {/* 基本情報 */}
+                    <div className="preview-meta">
+                      <div className="preview-meta-item">
+                        <span className="material-icons icon-sm">{ICONS.CALENDAR}</span>
+                        <span>{formatDate(pageRows.find(m => m.id === selectedMeetingId)?.meetingDate || "")}</span>
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      <div className="preview-meta-item">
+                        <span className="material-icons icon-sm">{ICONS.GROUP}</span>
+                        <span>{pageRows.find(m => m.id === selectedMeetingId)?.participants || ""}</span>
+                      </div>
+                    </div>
+
+                    {/* 要約 */}
+                    <div className="preview-section">
+                      <h4 className="preview-section-title">
+                        <span className="material-icons icon-sm">description</span>
+                        要約
+                      </h4>
+                      <div className="preview-summary">
+                        {previewDetail.summary || "要約がありません"}
+                      </div>
+                    </div>
+
+                    {/* 決定事項 */}
+                    <div className="preview-section">
+                      <h4 className="preview-section-title">
+                        <span className="material-icons icon-sm">check_circle</span>
+                        決定事項
+                        {previewDetail.decisions.length > 3 && (
+                          <span className="preview-count">+{previewDetail.decisions.length - 3}件</span>
+                        )}
+                      </h4>
+                      {previewDetail.decisions.length > 0 ? (
+                        <ul className="preview-list preview-decisions">
+                          {previewDetail.decisions.slice(0, 3).map((decision, idx) => (
+                            <li key={idx}>{decision}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="preview-empty">決定事項はありません</p>
+                      )}
+                    </div>
+
+                    {/* アクションアイテム */}
+                    <div className="preview-section">
+                      <h4 className="preview-section-title">
+                        <span className="material-icons icon-sm">assignment</span>
+                        アクションアイテム
+                        {previewDetail.actions.length > 3 && (
+                          <span className="preview-count">+{previewDetail.actions.length - 3}件</span>
+                        )}
+                      </h4>
+                      {previewDetail.actions.length > 0 ? (
+                        <ul className="preview-list preview-actions">
+                          {previewDetail.actions.slice(0, 3).map((action, idx) => (
+                            <li key={idx}>
+                              <div className="action-title">{action.title}</div>
+                              <div className="action-meta">
+                                {action.owner && <span className="action-owner">担当: {action.owner}</span>}
+                                {action.due && <span className="action-due">期限: {action.due}</span>}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="preview-empty">アクションアイテムはありません</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="preview-error">
+                    <p>詳細情報を読み込めませんでした</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="preview-footer">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => selectedMeetingId && router.push(`/meetings/${selectedMeetingId}/summary`)}
+                >
+                  <span className="material-icons icon-sm">open_in_new</span>
+                  <span>詳細レポートを開く</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* フッター(ページネーション) */}
