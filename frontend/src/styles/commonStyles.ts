@@ -32,7 +32,7 @@ export const commonStyles = `
   .meeting-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    padding: 20px 0;
+    padding: 15px 0;
   }
 
   .meeting-title {
@@ -1173,6 +1173,33 @@ export const commonStyles = `
      議事録履歴一覧画面スタイル
      ======================================== */
 
+  /* 会議履歴一覧画面専用のページレイアウト */
+  .meeting-history-page {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .meeting-history-page .page-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .meeting-history-page .meeting-header {
+    flex-shrink: 0;
+  }
+
+  .meeting-history-page .body-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
   /* データグリッドスタイル */
   .data-grid {
     width: 100%;
@@ -1207,9 +1234,10 @@ export const commonStyles = `
 
   /* 検索セクションのスタイル */
   .search-section {
-    padding: 24px 0;
+    padding: 10px 5px;
     border-bottom: 1px solid #E0E0E0;
     background: #FAFAFA;
+    flex-shrink: 0;
   }
   .search-fields {
     display: flex;
@@ -1280,8 +1308,9 @@ export const commonStyles = `
   .new-meeting-row {
     display: flex;
     justify-content: flex-end;
-    padding: 16px 0;
+    padding: 8px 0;
     border-bottom: 1px solid #E0E0E0;
+    flex-shrink: 0;
   }
 
   /* カレンダーポップアップ(範囲選択版) */
@@ -1374,11 +1403,12 @@ export const commonStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 0;
+    padding: 8px 0;
     border-top: 1px solid #E0E0E0;
     background: #FAFAFA;
     flex-wrap: wrap;
     gap: 12px;
+    flex-shrink: 0;
   }
   .page-info {
     color: #757575;
@@ -1499,5 +1529,319 @@ export const commonStyles = `
     border-top: 1px solid #e6e8ee;
     flex-wrap: wrap;
     gap: 12px;
+  }
+
+  /* ========================================
+     会議履歴プレビューパネルスタイル
+     ======================================== */
+
+  .meeting-history-container {
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .preview-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 98;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .table-wrap {
+    flex: 1;
+    background: #fff;
+    border-radius: 8px;
+    overflow-y: auto;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: flex 0.3s ease;
+    position: relative;
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .table-wrap.with-preview {
+    flex: 0 0 calc(50% - 8px);
+  }
+
+  .table-wrap table {
+    flex-shrink: 0;
+  }
+
+  .clickable-row {
+    cursor: pointer;
+  }
+
+  .selected-row {
+    /* 選択時の背景色を削除 */
+  }
+
+  .preview-panel {
+    flex: 0 0 calc(50% - 8px);
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    animation: slideIn 0.3s ease;
+    position: relative;
+    z-index: 99;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .preview-header {
+    padding: 8px 24px;
+    border-bottom: 2px solid #E0E0E0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .preview-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .preview-close-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 3px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s ease;
+    margin-left: 12px;
+  }
+
+  .preview-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .preview-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+  }
+
+  .preview-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #757575;
+  }
+
+  .preview-loading .spinner {
+    margin-bottom: 16px;
+  }
+
+  .preview-error {
+    text-align: center;
+    color: #F44336;
+    padding: 40px 20px;
+  }
+
+  .preview-meta {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #EEEEEE;
+  }
+
+  .preview-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #616161;
+  }
+
+  .preview-section {
+    margin-bottom: 28px;
+  }
+
+  .preview-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .preview-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #212121;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .preview-count {
+    font-size: 12px;
+    font-weight: 400;
+    color: #757575;
+    margin-left: auto;
+  }
+
+  .preview-summary {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #424242;
+    background: #F5F5F5;
+    padding: 16px;
+    border-radius: 6px;
+    max-height: 100px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+
+  .preview-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .preview-list li {
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+
+  .preview-list li:last-child {
+    margin-bottom: 0;
+  }
+
+  .preview-decisions li {
+    background: #E8F5E9;
+    border-left: 4px solid #4CAF50;
+    color: #1B5E20;
+  }
+
+  .preview-actions li {
+    background: #E3F2FD;
+    border-left: 4px solid #2196F3;
+    color: #0D47A1;
+  }
+
+  .preview-empty {
+    font-size: 13px;
+    color: #9E9E9E;
+    text-align: center;
+    padding: 24px 12px;
+    background: #FAFAFA;
+    border-radius: 6px;
+  }
+
+  .action-title {
+    font-weight: 500;
+    margin-bottom: 6px;
+  }
+
+  .action-meta {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: #616161;
+  }
+
+  .action-owner,
+  .action-due {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .preview-footer {
+    border-top: 1px solid #E0E0E0;
+    background: #FAFAFA;
+    flex-shrink: 0;
+  }
+
+  .preview-footer .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* レスポンシブ - プレビューパネル */
+  @media (max-width: 1024px) {
+    .meeting-history-container {
+      flex-direction: column;
+    }
+
+    .table-wrap,
+    .table-wrap.with-preview {
+      flex: 1;
+      width: 100%;
+    }
+
+    .preview-panel {
+      flex: 1;
+      width: 100%;
+      max-height: 600px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .preview-panel {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: 100vh;
+      border-radius: 0;
+      z-index: 1000;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateY(100%);
+      }
+      to {
+        transform: translateY(0);
+      }
+    }
   }
 `;

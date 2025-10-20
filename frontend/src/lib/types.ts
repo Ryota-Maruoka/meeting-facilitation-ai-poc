@@ -137,3 +137,16 @@ export type ActionCreate = Omit<Action, "id" | "created_at" | "status">;
 
 // Parking Lot作成用のデータ
 export type ParkingLotItemCreate = Omit<ParkingLotItem, "id" | "created_at">;
+
+// 会議詳細プレビュー用の型(要約API /meetings/{id}/summaryのレスポンス)
+export type MeetingDetailPreview = {
+  generated_at: string;
+  summary: string;
+  decisions: string[];
+  undecided: string[];
+  actions: {
+    title: string;
+    owner: string;
+    due: string;
+  }[];
+};
