@@ -1,6 +1,6 @@
 "use client";
 
-import { FC, useState, useEffect, useRef, useCallback } from "react";
+import { FC, useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import {
   Box,
   Typography,
@@ -27,6 +27,10 @@ type LiveTranscriptAreaProps = {
   autoStart?: boolean; // 自動的に録音を開始するかどうか
 };
 
+export type LiveTranscriptAreaHandle = {
+  stopAndFlush: () => Promise<void>;
+};
+
 type TranscriptItem = {
   id: string;
   timestamp: string;
@@ -41,11 +45,11 @@ type TranscriptItem = {
  * 音声録音とリアルタイム文字起こし結果を表示
  * 録音状態を内部で管理し、自動録音にも対応
  */
-const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
+const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAreaProps>(({ 
   meetingId,
   onTranscriptsUpdate,
   autoStart = false,
-}) => {
+}, ref) => {
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +61,7 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
+  const stopResolveRef = useRef<(() => void) | null>(null);
 
   // ブラウザの対応状況をチェック
   useEffect(() => {
@@ -261,6 +266,18 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
           // チャンクをクリア（次の周期の準備）
           audioChunksRef.current = [];
         }
+
+        // 録音デバイスを停止
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+
+        // stopAndFlush の待機を解放
+        if (stopResolveRef.current) {
+          stopResolveRef.current();
+          stopResolveRef.current = null;
+        }
       };
 
       mediaRecorder.onerror = (e) => {
@@ -319,13 +336,22 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       mediaRecorderRef.current.stop();
     }
     
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
     setIsRecording(false);
   }, []);
+
+  // 親コンポーネントから呼び出す: 録音停止し、最後の送信・文字起こし完了まで待機
+  useImperativeHandle(ref, () => ({
+    stopAndFlush: async () => {
+      if (!mediaRecorderRef.current || (mediaRecorderRef.current.state !== "recording")) {
+        return; // 既に停止済み
+      }
+      await new Promise<void>((resolve) => {
+        stopResolveRef.current = resolve;
+        // stopRecording 内で MediaRecorder.stop() を呼ぶ
+        stopRecording();
+      });
+    },
+  }), [stopRecording]);
 
   // 文字起こし結果をクリア
   const clearTranscripts = useCallback(() => {
@@ -470,6 +496,6 @@ const LiveTranscriptArea: FC<LiveTranscriptAreaProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
 
 export default LiveTranscriptArea;

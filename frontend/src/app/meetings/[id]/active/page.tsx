@@ -31,13 +31,13 @@
  * - shared/lib/types.ts - 型定義
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
-import LiveTranscriptArea from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
+import LiveTranscriptArea, { LiveTranscriptAreaHandle } from "@/components/sections/LiveTranscriptArea/LiveTranscriptArea";
 import DeviationAlert from "@/components/sections/DeviationAlert";
 import { useDeviationDetection } from "@/hooks/useDeviationDetection";
 import { apiClient } from "@/lib/api";
@@ -78,6 +78,7 @@ export default function MeetingActivePage() {
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
+  const transcriptRef = useRef<LiveTranscriptAreaHandle | null>(null);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
@@ -323,7 +324,12 @@ export default function MeetingActivePage() {
     setEndModalOpen(false);
 
     try {
-      // 会議終了 → 要約生成を順に実行
+      // 1) 録音停止＆最後のチャンク送信・文字起こし完了まで待機
+      if (transcriptRef.current) {
+        await transcriptRef.current.stopAndFlush();
+      }
+
+      // 2) 会議終了 → 要約生成を順に実行
       await apiClient.endMeeting(meetingId);
       await apiClient.generateSummary(meetingId);
     } catch (error) {
@@ -529,6 +535,7 @@ export default function MeetingActivePage() {
             </div>
             <div className="section-content">
               <LiveTranscriptArea
+                ref={transcriptRef}
                 meetingId={meetingId}
                 onTranscriptsUpdate={handleTranscriptsUpdate}
                 autoStart={isMeetingStarted}
