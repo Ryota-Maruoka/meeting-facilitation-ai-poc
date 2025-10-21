@@ -257,8 +257,57 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 "language": "ja"
             }
 
+        # Azure OpenAI Whisperを使用する場合
+        if settings.asr_provider == "azure_whisper":
+            logger.info("Azure OpenAI Whisper APIを使用して文字起こしを実行")
+            
+            from .azure_whisper_service import transcribe_with_azure_whisper
+            
+            try:
+                # WebMファイルの場合は先にWAVに変換
+                processed_audio_path = audio_file_path
+                temp_wav_path = None
+
+                if audio_file_path.lower().endswith('.webm'):
+                    print(">>> WebMファイルをWAVに変換してからAzure Whisperに渡します")
+                    with open(audio_file_path, 'rb') as f:
+                        webm_data = f.read()
+
+                    wav_data = convert_webm_to_wav(webm_data)
+
+                    # 一時WAVファイルとして保存
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+                        temp_wav.write(wav_data)
+                        temp_wav_path = temp_wav.name
+                        processed_audio_path = temp_wav_path
+
+                    print(f">>> WAV変換完了: {processed_audio_path}")
+
+                result = await transcribe_with_azure_whisper(processed_audio_path)
+
+                # 一時ファイルをクリーンアップ
+                if temp_wav_path and os.path.exists(temp_wav_path):
+                    try:
+                        os.unlink(temp_wav_path)
+                        print(f">>> 一時WAVファイルを削除: {temp_wav_path}")
+                    except Exception as e:
+                        logger.warning(f"一時ファイル削除エラー: {e}")
+
+                return result
+
+            except Exception as e:
+                # Azure Whisperが失敗した場合のクリーンアップ
+                if temp_wav_path and os.path.exists(temp_wav_path):
+                    try:
+                        os.unlink(temp_wav_path)
+                    except:
+                        pass
+                
+                logger.error(f"Azure OpenAI Whisper文字起こしエラー: {e}")
+                raise
+
         # Python版Whisperを使用する場合
-        if settings.asr_provider == "whisper_python":
+        elif settings.asr_provider == "whisper_python":
             logger.info("Python版Whisperを使用して文字起こしを実行")
 
             try:
