@@ -392,9 +392,8 @@ python test_whisper.py
 - **shadcn/ui** - UIコンポーネント
 
 ### AI/ML
-- **Whisper.cpp** - 音声文字起こし（ローカル実行、無料）
-- **OpenAI Whisper API** - 音声文字起こし（クラウド、有料）
-- **Azure OpenAI API** - 要約・未決事項抽出・提案生成（GPT-4o mini使用）
+- **Azure OpenAI Whisper API** - 音声文字起こし（クラウド、高精度）
+- **Azure OpenAI API** - 要約・未決事項抽出・提案生成（GPT-5 mini使用）
 
 ## API エンドポイント
 

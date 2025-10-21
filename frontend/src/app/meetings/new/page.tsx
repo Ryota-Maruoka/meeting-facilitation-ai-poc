@@ -27,7 +27,7 @@
  *
  * 関連ファイル:
  * - features/meeting-creation/components/* - 会議作成関連コンポーネント
- * - shared/lib/types.ts - 型定義
+ * - lib/types.ts - 型定義
  */
 
 import React, { useState, useMemo, useEffect, Suspense } from "react";

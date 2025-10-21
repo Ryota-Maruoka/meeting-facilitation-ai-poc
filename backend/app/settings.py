@@ -28,12 +28,18 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,https://bemac-meeting.fr-aicompass.com"
     
     # ASR設定
-    # asr_provider: "stub" (ダミーテキスト), "whisper_python" (Python版Whisper)
-    asr_provider: str = "whisper_python"  # Python版Whisperを使用（安定性が高い）
+    # asr_provider: "stub" (ダミーテキスト), "whisper_python" (Python版Whisper), "azure_whisper" (Azure OpenAI Whisper)
+    asr_provider: str = "azure_whisper"  # Azure OpenAI Whisper APIを使用
     asr_language: str = "ja"
     asr_temperature: float = 0.0
     
-    # Azure OpenAI設定（会議要約用）
+    # Azure OpenAI Whisper設定
+    azure_whisper_endpoint: str = ""
+    azure_whisper_api_key: str = ""
+    azure_whisper_deployment: str = "whisper"
+    azure_whisper_api_version: str = "2024-06-01"
+    
+    # Azure OpenAI設定（会議要約・脱線検知用）
     azure_openai_endpoint: str = ""
     azure_openai_api_key: str = ""
     azure_openai_api_version_responses: str = "2025-04-01"

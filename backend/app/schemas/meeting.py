@@ -57,5 +57,4 @@ class Meeting(BaseModel):
     participants: list[str]
     agenda: list[AgendaItem]
     status: str = "draft"
-    consent_recording: bool = Field(False, serialization_alias="consentRecording")
 
