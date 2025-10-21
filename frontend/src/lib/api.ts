@@ -263,6 +263,7 @@ class ApiClient {
     });
     
     // バックエンドレスポンスをフロントエンド型にマッピング
+    const timestamp = String(backendResponse.timestamp ?? new Date().toISOString());
     return {
       id: String(backendResponse.id ?? Date.now().toString()),
       is_deviation: Boolean(backendResponse.is_deviation),
@@ -270,11 +271,12 @@ class ApiClient {
       similarity: Number(backendResponse.similarity_score ?? 0),
       best_agenda: String(backendResponse.best_agenda ?? ""),
       message: String(backendResponse.message ?? ""),
-      suggestedTopics: Array.isArray(backendResponse.suggested_agenda) 
+      suggestedTopics: Array.isArray(backendResponse.suggested_agenda)
         ? backendResponse.suggested_agenda as string[]
         : [],
       recent_text: String(backendResponse.recent_text ?? ""),
-      created_at: String(backendResponse.timestamp ?? new Date().toISOString()),
+      created_at: timestamp,
+      timestamp: timestamp,
     };
   }
 
