@@ -225,7 +225,8 @@ export const mockDeviationAlert: DeviationAlert = {
     "API方針の確認"
   ],
   recent_text: "会議室の予約について話し合っています",
-  created_at: "2024-01-15T10:25:00Z"
+  created_at: "2024-01-15T10:25:00Z",
+  timestamp: "2024-01-15T10:25:00Z"
 };
 
 // サンプル会議サマリ
