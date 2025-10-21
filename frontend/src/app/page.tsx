@@ -23,7 +23,7 @@
  *
  * 関連ファイル:
  * - features/meeting-history/components/* - 会議履歴関連コンポーネント
- * - shared/lib/types.ts - 型定義
+ * - lib/types.ts - 型定義
  * - shared/lib/utils.ts - ユーティリティ関数
  */
 

@@ -28,7 +28,7 @@
  *
  * 関連ファイル:
  * - features/meeting-summary/components/* - 会議サマリー関連コンポーネント
- * - shared/lib/types.ts - 型定義
+ * - lib/types.ts - 型定義
  */
 
 import React, { useState, useEffect } from "react";
