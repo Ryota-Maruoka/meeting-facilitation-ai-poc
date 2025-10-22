@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Azure OpenAI Whisper API テストスクリプト
+Azure OpenAI Whisper API テストスクリプト（処理時間表示版）
 
-Azure OpenAI Whisper APIの動作確認を行う
+Azure OpenAI Whisper APIの動作確認と処理時間の測定を行う
 """
 
 import asyncio
@@ -31,7 +31,7 @@ async def test_azure_whisper_file():
     print(f"API Key設定: {'あり' if settings.azure_whisper_api_key else 'なし'}")
     
     if not settings.azure_whisper_endpoint or not settings.azure_whisper_api_key:
-        print("❌ Azure Whisper設定が不完全です")
+        print("Azure Whisper設定が不完全です")
         return False
     
     # テスト用音声ファイル（存在する場合）
@@ -48,25 +48,33 @@ async def test_azure_whisper_file():
             break
     
     if not test_file:
-        print("❌ テスト用音声ファイルが見つかりません")
+        print("テスト用音声ファイルが見つかりません")
         print("以下のいずれかのファイルを配置してください:")
         for file_name in test_files:
             print(f"  - {file_name}")
         return False
     
-    print(f"📁 テストファイル: {test_file}")
+    print(f"テストファイル: {test_file}")
     
     try:
         # Azure Whisper APIで文字起こし
         result = await transcribe_with_azure_whisper(test_file)
         
-        print("✅ 文字起こし成功!")
-        print(f"📝 結果: {result.get('text', '')}")
-        print(f"🌐 言語: {result.get('language', '')}")
-        print(f"⏱️ 長さ: {result.get('duration', 0)}秒")
+        print("文字起こし成功!")
+        print(f"結果: {result.get('text', '')}")
+        print(f"言語: {result.get('language', '')}")
+        print(f"音声長さ: {result.get('duration', 0)}秒")
+        print(f"処理時間: {result.get('processing_time', 0):.2f}秒")
+        
+        # 処理効率の計算
+        audio_duration = result.get('duration', 0)
+        processing_time = result.get('processing_time', 0)
+        if audio_duration > 0 and processing_time > 0:
+            efficiency = audio_duration / processing_time
+            print(f"処理効率: {efficiency:.2f}x (音声長さ/処理時間)")
         
         # デバッグ: 全フィールドを表示
-        print("\n🔍 デバッグ情報:")
+        print("\nデバッグ情報:")
         print(f"  全フィールド: {list(result.keys())}")
         print(f"  segments数: {len(result.get('segments', []))}")
         if result.get('segments'):
@@ -78,7 +86,7 @@ async def test_azure_whisper_file():
         return True
         
     except Exception as e:
-        print(f"❌ 文字起こし失敗: {e}")
+        print(f"文字起こし失敗: {e}")
         return False
 
 
@@ -100,7 +108,7 @@ async def test_azure_whisper_data():
             break
     
     if not test_file:
-        print("❌ テスト用音声ファイルが見つかりません")
+        print("テスト用音声ファイルが見つかりません")
         return False
     
     try:
@@ -108,19 +116,27 @@ async def test_azure_whisper_data():
         with open(test_file, "rb") as f:
             audio_data = f.read()
         
-        print(f"📁 テストファイル: {test_file}")
-        print(f"📊 データサイズ: {len(audio_data)} bytes")
+        print(f"テストファイル: {test_file}")
+        print(f"データサイズ: {len(audio_data)} bytes")
         
         # Azure Whisper APIで文字起こし
         result = await transcribe_audio_data_azure_whisper(audio_data, test_file)
         
-        print("✅ 文字起こし成功!")
-        print(f"📝 結果: {result.get('text', '')}")
-        print(f"🌐 言語: {result.get('language', '')}")
-        print(f"⏱️ 長さ: {result.get('duration', 0)}秒")
+        print("文字起こし成功!")
+        print(f"結果: {result.get('text', '')}")
+        print(f"言語: {result.get('language', '')}")
+        print(f"音声長さ: {result.get('duration', 0)}秒")
+        print(f"処理時間: {result.get('processing_time', 0):.2f}秒")
+        
+        # 処理効率の計算
+        audio_duration = result.get('duration', 0)
+        processing_time = result.get('processing_time', 0)
+        if audio_duration > 0 and processing_time > 0:
+            efficiency = audio_duration / processing_time
+            print(f"処理効率: {efficiency:.2f}x (音声長さ/処理時間)")
         
         # デバッグ: 全フィールドを表示
-        print("\n🔍 デバッグ情報:")
+        print("\nデバッグ情報:")
         print(f"  全フィールド: {list(result.keys())}")
         print(f"  segments数: {len(result.get('segments', []))}")
         if result.get('segments'):
@@ -132,14 +148,14 @@ async def test_azure_whisper_data():
         return True
         
     except Exception as e:
-        print(f"❌ 文字起こし失敗: {e}")
+        print(f"文字起こし失敗: {e}")
         return False
 
 
 async def main():
     """メインテスト"""
-    print("🚀 Azure OpenAI Whisper API テスト開始")
-    print("=" * 50)
+    print("Azure OpenAI Whisper API テスト開始（処理時間測定版）")
+    print("=" * 60)
     
     # ファイルテスト
     file_success = await test_azure_whisper_file()
@@ -147,16 +163,16 @@ async def main():
     # データテスト
     data_success = await test_azure_whisper_data()
     
-    print("\n" + "=" * 50)
-    print("📊 テスト結果:")
-    print(f"  ファイルテスト: {'✅ 成功' if file_success else '❌ 失敗'}")
-    print(f"  データテスト: {'✅ 成功' if data_success else '❌ 失敗'}")
+    print("\n" + "=" * 60)
+    print("テスト結果:")
+    print(f"  ファイルテスト: {'成功' if file_success else '失敗'}")
+    print(f"  データテスト: {'成功' if data_success else '失敗'}")
     
     if file_success and data_success:
-        print("\n🎉 すべてのテストが成功しました!")
+        print("\nすべてのテストが成功しました!")
         print("Azure OpenAI Whisper APIが正常に動作しています。")
     else:
-        print("\n⚠️ 一部のテストが失敗しました。")
+        print("\n一部のテストが失敗しました。")
         print("設定を確認してください。")
     
     return file_success and data_success
