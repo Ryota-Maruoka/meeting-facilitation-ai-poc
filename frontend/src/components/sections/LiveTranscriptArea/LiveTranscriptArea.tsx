@@ -62,6 +62,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
   const audioChunksRef = useRef<Blob[]>([]);
   const startTimeRef = useRef<number>(0);
   const stopResolveRef = useRef<(() => void) | null>(null);
+  const finalStopRequestedRef = useRef<boolean>(false);
 
   // ブラウザの対応状況をチェック
   useEffect(() => {
@@ -267,16 +268,17 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
           audioChunksRef.current = [];
         }
 
-        // 録音デバイスを停止
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
-
-        // stopAndFlush の待機を解放
-        if (stopResolveRef.current) {
-          stopResolveRef.current();
-          stopResolveRef.current = null;
+        // stopAndFlush（最終停止）要求時のみデバイスを停止し、待機を解放
+        if (finalStopRequestedRef.current) {
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          if (stopResolveRef.current) {
+            stopResolveRef.current();
+            stopResolveRef.current = null;
+          }
+          finalStopRequestedRef.current = false; // リセット
         }
       };
 
@@ -290,17 +292,22 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
 
       // ✅ 30秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
       const recordingInterval = setInterval(() => {
+        if (finalStopRequestedRef.current) {
+          // 最終停止要求中は自動サイクルを停止
+          return;
+        }
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
           console.log("🔄 30秒経過：録音を停止→再開");
           mediaRecorderRef.current.stop();
 
           // 少し待ってから再開（ondataavailableの完了を待つ）
           setTimeout(() => {
+            if (finalStopRequestedRef.current) return;
             if (mediaRecorderRef.current && streamRef.current) {
               audioChunksRef.current = []; // チャンクをクリア
               mediaRecorderRef.current.start(30000);
             }
-          }, 100);
+          }, 120);
         }
       }, 30000); // 30秒ごと
       
@@ -347,6 +354,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
       }
       await new Promise<void>((resolve) => {
         stopResolveRef.current = resolve;
+        finalStopRequestedRef.current = true;
         // stopRecording 内で MediaRecorder.stop() を呼ぶ
         stopRecording();
       });

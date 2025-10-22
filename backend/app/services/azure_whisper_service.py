@@ -10,6 +10,7 @@ import logging
 import tempfile
 import wave
 import io
+import time
 from typing import Dict, Any, List
 import httpx
 from ..settings import settings
@@ -41,6 +42,8 @@ async def transcribe_with_azure_whisper(audio_file_path: str) -> Dict[str, Any]:
     Returns:
         文字起こし結果
     """
+    start_time = time.time()
+    
     try:
         logger.info(">>> Azure OpenAI Whisper APIで音声ファイル文字起こし中...")
         
@@ -72,8 +75,8 @@ async def transcribe_with_azure_whisper(audio_file_path: str) -> Dict[str, Any]:
                 "temperature": (None, str(settings.asr_temperature)),
             }
             
-            # API呼び出し
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            # API呼び出し（タイムアウトを延長）
+            async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     url,
                     headers=headers,
@@ -91,22 +94,31 @@ async def transcribe_with_azure_whisper(audio_file_path: str) -> Dict[str, Any]:
         logger.info(f">>> Azure Whisper APIレスポンス: {result}")
         logger.info(f">>> Azure Whisper文字起こし結果: {text[:200] if text else '(empty)'}")
         
-        # durationが存在しない場合は、音声ファイルから計算を試行
+        # durationが存在しない場合は、segmentsまたはローカルで計算を試行
         duration = result.get("duration", 0.0)
         if duration == 0.0:
-            # 音声ファイルから長さを計算
-            try:
-                with open(audio_file_path, "rb") as f:
-                    audio_data = f.read()
-                duration = calculate_audio_duration(audio_data)
-                logger.info(f">>> 音声ファイルから計算したduration: {duration}秒")
-            except Exception as e:
-                logger.warning(f"音声ファイルの長さ計算に失敗: {e}")
+            if "segments" in result and result["segments"]:
+                # 最後のセグメントの終了時間を取得
+                last_segment = result["segments"][-1]
+                duration = last_segment.get("end", 0.0)
+                logger.info(f">>> セグメントから計算したduration: {duration}秒")
+            else:
+                # APIがdurationもsegmentsも返さない場合、ローカルで計算
+                try:
+                    with open(audio_file_path, "rb") as f:
+                        audio_data = f.read()
+                    duration = calculate_audio_duration(audio_data)
+                    logger.info(f">>> ローカルで計算したduration: {duration}秒")
+                except Exception as e:
+                    logger.warning(f"音声ファイルの長さ計算に失敗: {e}")
         
         # segmentsが存在しない場合は空配列を設定
         segments = result.get("segments", [])
         if not segments:
             logger.info(">>> segmentsが空のため、空配列を設定")
+        
+        # 処理時間を計算
+        processing_time = time.time() - start_time
         
         # 既存の形式に合わせて返す
         return {
@@ -114,21 +126,20 @@ async def transcribe_with_azure_whisper(audio_file_path: str) -> Dict[str, Any]:
             "language": result.get("language", settings.asr_language),
             "duration": duration,
             "segments": segments,
+            "processing_time": processing_time,  # 処理時間を追加
         }
         
     except httpx.HTTPStatusError as e:
         logger.error(f"Azure OpenAI Whisper API HTTP エラー: {e.response.status_code} - {e.response.text}")
-        raise RuntimeError(f"Azure OpenAI Whisper API エラー: {e.response.status_code}")
+        raise RuntimeError(f"Azure OpenAI Whisper API エラー: {e.response.status_code} - {e.response.text}")
     
     except httpx.RequestError as e:
         logger.error(f"Azure OpenAI Whisper API リクエストエラー: {e}")
-        error_msg = f"Azure OpenAI Whisper API 接続エラー: {type(e).__name__} - {str(e)}"
-        raise RuntimeError(error_msg)
+        raise RuntimeError(f"Azure OpenAI Whisper API 接続エラー: {e}")
     
     except Exception as e:
         logger.error(f"Azure OpenAI Whisper API 予期しないエラー: {e}")
-        error_msg = f"Azure OpenAI Whisper API エラー: {type(e).__name__} - {str(e)}"
-        raise RuntimeError(error_msg)
+        raise RuntimeError(f"Azure OpenAI Whisper API エラー: {e}")
 
 
 async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str = "audio.wav") -> Dict[str, Any]:
@@ -137,11 +148,13 @@ async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str =
 
     Args:
         audio_data: 音声バイナリデータ
-        filename: ファイル名
+        filename: ファイル名 (APIに渡すための仮のファイル名)
 
     Returns:
         文字起こし結果
     """
+    start_time = time.time()
+    
     try:
         logger.info(">>> Azure OpenAI Whisper APIで音声データ文字起こし中...")
         
@@ -160,9 +173,9 @@ async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str =
             "api-key": settings.azure_whisper_api_key,
         }
         
-        # 音声データをファイル形式で送信
+        # ファイルライクオブジェクトとしてデータを渡す
         files = {
-            "file": (filename, audio_data, "audio/wav"),
+            "file": (filename, io.BytesIO(audio_data), "audio/wav"),
         }
         
         # フォームデータ
@@ -191,17 +204,26 @@ async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str =
         logger.info(f">>> Azure Whisper APIレスポンス: {result}")
         logger.info(f">>> Azure Whisper文字起こし結果: {text[:200] if text else '(empty)'}")
         
-        # durationが存在しない場合は、音声データから計算を試行
+        # durationが存在しない場合は、segmentsまたはローカルで計算を試行
         duration = result.get("duration", 0.0)
         if duration == 0.0:
-            # 音声データから長さを計算
-            duration = calculate_audio_duration(audio_data)
-            logger.info(f">>> 音声データから計算したduration: {duration}秒")
+            if "segments" in result and result["segments"]:
+                # 最後のセグメントの終了時間を取得
+                last_segment = result["segments"][-1]
+                duration = last_segment.get("end", 0.0)
+                logger.info(f">>> セグメントから計算したduration: {duration}秒")
+            else:
+                # APIがdurationもsegmentsも返さない場合、ローカルで計算
+                duration = calculate_audio_duration(audio_data)
+                logger.info(f">>> ローカルで計算したduration: {duration}秒")
         
         # segmentsが存在しない場合は空配列を設定
         segments = result.get("segments", [])
         if not segments:
             logger.info(">>> segmentsが空のため、空配列を設定")
+        
+        # 処理時間を計算
+        processing_time = time.time() - start_time
         
         # 既存の形式に合わせて返す
         return {
@@ -209,18 +231,17 @@ async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str =
             "language": result.get("language", settings.asr_language),
             "duration": duration,
             "segments": segments,
+            "processing_time": processing_time,  # 処理時間を追加
         }
         
     except httpx.HTTPStatusError as e:
         logger.error(f"Azure OpenAI Whisper API HTTP エラー: {e.response.status_code} - {e.response.text}")
-        raise RuntimeError(f"Azure OpenAI Whisper API エラー: {e.response.status_code}")
+        raise RuntimeError(f"Azure OpenAI Whisper API エラー: {e.response.status_code} - {e.response.text}")
     
     except httpx.RequestError as e:
         logger.error(f"Azure OpenAI Whisper API リクエストエラー: {e}")
-        error_msg = f"Azure OpenAI Whisper API 接続エラー: {type(e).__name__} - {str(e)}"
-        raise RuntimeError(error_msg)
+        raise RuntimeError(f"Azure OpenAI Whisper API 接続エラー: {e}")
     
     except Exception as e:
         logger.error(f"Azure OpenAI Whisper API 予期しないエラー: {e}")
-        error_msg = f"Azure OpenAI Whisper API エラー: {type(e).__name__} - {str(e)}"
-        raise RuntimeError(error_msg)
+        raise RuntimeError(f"Azure OpenAI Whisper API エラー: {e}")

@@ -33,6 +33,11 @@ def add_parking(meeting_id: str, item: ParkingItem) -> dict:
     meeting = store.load_meeting(meeting_id)
     if not meeting:
         raise HTTPException(404, "Meeting not found")
+    
+    # parkingフィールドが存在しない場合は初期化
+    if "parking" not in meeting:
+        meeting["parking"] = []
+    
     meeting["parking"].append(item.model_dump())
     store.save_meeting(meeting_id, meeting)
     return {"ok": True, "count": len(meeting["parking"])}
@@ -54,5 +59,7 @@ def list_parking(meeting_id: str) -> list:
     meeting = store.load_meeting(meeting_id)
     if not meeting:
         raise HTTPException(404, "Meeting not found")
+    
+    # parkingフィールドが存在しない場合は空のリストを返す
     return meeting.get("parking", [])
 
