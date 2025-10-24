@@ -38,7 +38,7 @@ Resources:
       GroupName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-alb-sg
       GroupDescription: Security group for Frontend ALB
       VpcId:
-        Fn::ImportValue: aicompass-demo-VpcId
+        Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -77,8 +77,8 @@ Resources:
       Type: application
       IpAddressType: ipv4
       Subnets:
-        - Fn::ImportValue: aicompass-demo-PublicSubnet1Id
-        - Fn::ImportValue: aicompass-demo-PublicSubnet2Id
+        - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PublicSubnet1Id
+        - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PublicSubnet2Id
       SecurityGroups:
         - !Ref AlbSecurityGroup
       LoadBalancerAttributes:
@@ -144,7 +144,7 @@ Resources:
         # 200だけでなくリダイレクト等も許容したいなら "200-399"
         HttpCode: 200
       VpcId:
-        Fn::ImportValue: aicompass-demo-VpcId
+        Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-VpcId
       HealthCheckEnabled: true
       HealthCheckPath: /api/health
       # 実際のトラフィックのポートを使う（Portに追従）

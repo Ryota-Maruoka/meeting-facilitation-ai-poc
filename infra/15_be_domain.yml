@@ -42,7 +42,7 @@ Resources:
         Comment: !Sub Private hosted zone for ${DomainName}
       VPCs:
         - VPCId: 
-            Fn::ImportValue: aicompass-demo-VpcId
+            Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-VpcId
           VPCRegion: !Ref AWS::Region
       HostedZoneTags:
         - Key: customer

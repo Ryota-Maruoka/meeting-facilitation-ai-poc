@@ -10,7 +10,7 @@ DOMAIN_NAME="bemac-meeting.fr-aicompass.com"
 SERVICE_NAME="meeting"
 # DB_USERNAME="AICOMPASSadmin"
 # DB_PASSWORD="AICOMPASSadmin" 
-DOMAIN_CERTIFICATE_ARN="arn:aws:acm:ap-northeast-1:688567301060:certificate/1be14353-9dc4-47f7-b811-52ba84e9457f"
+DOMAIN_CERTIFICATE_ARN="arn:aws:acm:ap-northeast-1:111938288341:certificate/1be14353-9dc4-47f7-b811-52ba84e9457f"
 # USER_POOL_ARN="arn:aws:cognito-idp:ap-northeast-1:688567301060:userpool/ap-northeast-1_6PV70QiOk" 
 ECR_REPOSITORY_NAME="accounting-repository"
 

@@ -1,0 +1,361 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: VPC and Network Infrastructure for Meeting Facilitation AI PoC
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Parameters                                                                                    ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Parameters:
+  CustomerName:
+    Type: String
+    Default: bemac
+
+  ProjectName:
+    Type: String
+    Default: meeting
+
+  Environment:
+    Type: String
+    Default: dev
+
+  SystemName:
+    Type: String
+    Default: bemac-meeting-system
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Resources                                                                                     ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Resources:
+  # ----------------------------------------------------------------------------- #
+  # VPC
+  # ----------------------------------------------------------------------------- #
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-vpc
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # Internet Gateway
+  # ----------------------------------------------------------------------------- #
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-igw
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # ----------------------------------------------------------------------------- #
+  # Public Subnets
+  # ----------------------------------------------------------------------------- #
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-public-subnet-1
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-public-subnet-2
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # Private Subnets
+  # ----------------------------------------------------------------------------- #
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-private-subnet-1
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.12.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-private-subnet-2
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # NAT Gateway
+  # ----------------------------------------------------------------------------- #
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-nat-eip-1
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-nat-gateway-1
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  # ----------------------------------------------------------------------------- #
+  # Route Tables
+  # ----------------------------------------------------------------------------- #
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-public-routes
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-private-routes-1
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet2
+
+  # ----------------------------------------------------------------------------- #
+  # Security Groups
+  # ----------------------------------------------------------------------------- #
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-alb-sg
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ECS tasks
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${CustomerName}-${ProjectName}-${Environment}-ecs-sg
+        - Key: customer
+          Value: !Ref CustomerName
+        - Key: project
+          Value: !Ref ProjectName
+        - Key: environment
+          Value: !Ref Environment
+        - Key: system
+          Value: !Ref SystemName
+
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+### Outputs                                                                                       ###
+### -+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+- ###
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-VpcId
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-PublicSubnet1Id
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-PublicSubnet2Id
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet1Id
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet2Id
+
+  AlbSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref AlbSecurityGroup
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-AlbSecurityGroupId
+
+  EcsSecurityGroupId:
+    Description: ECS Security Group ID
+    Value: !Ref EcsSecurityGroup
+    Export:
+      Name: !Sub ${CustomerName}-${ProjectName}-${Environment}-EcsSecurityGroupId
+
+

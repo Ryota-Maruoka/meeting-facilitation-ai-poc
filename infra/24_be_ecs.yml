@@ -341,10 +341,10 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: DISABLED
           SecurityGroups:
-            - Fn::ImportValue: aicompass-demo-EcsSecurityGroupId
+            - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-EcsSecurityGroupId
           Subnets:
-            - Fn::ImportValue: aicompass-demo-PrivateSubnet1Id
-            - Fn::ImportValue: aicompass-demo-PrivateSubnet2Id
+            - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet1Id
+            - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet2Id
       LoadBalancers:
         - ContainerName: !Sub ${CustomerName}-${ProjectName}-${Environment}-be-container
           ContainerPort: !Ref Port

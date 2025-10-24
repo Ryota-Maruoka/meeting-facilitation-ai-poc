@@ -72,7 +72,7 @@ Resources:
       GroupName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-ecs-sg
       GroupDescription: Security group for Frontend ECS tasks
       VpcId:
-        Fn::ImportValue: aicompass-demo-VpcId
+        Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3000
@@ -302,7 +302,7 @@ Resources:
           SecurityGroups:
             - !Ref FeEcsSecurityGroup
           Subnets:
-            - Fn::ImportValue: aicompass-demo-PrivateSubnet1Id
+            - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet1Id
       LoadBalancers:
         - ContainerName: !Sub ${CustomerName}-${ProjectName}-${Environment}-fe-container
           ContainerPort: 3000

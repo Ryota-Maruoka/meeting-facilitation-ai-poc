@@ -48,10 +48,10 @@ Resources:
       Type: application
       IpAddressType: ipv4
       Subnets:
-        - Fn::ImportValue: aicompass-demo-PrivateSubnet1Id
-        - Fn::ImportValue: aicompass-demo-PrivateSubnet2Id
+        - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet1Id
+        - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-PrivateSubnet2Id
       SecurityGroups:
-        - Fn::ImportValue: aicompass-demo-AlbSecurityGroupId
+        - Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-AlbSecurityGroupId
       LoadBalancerAttributes:
         - Key: deletion_protection.enabled
           Value: false
@@ -109,7 +109,7 @@ Resources:
       Matcher: 
         HttpCode: 200
       VpcId:
-        Fn::ImportValue: aicompass-demo-VpcId
+        Fn::ImportValue: !Sub ${CustomerName}-${ProjectName}-${Environment}-VpcId
       HealthCheckEnabled: true
       HealthCheckPath: /health
       HealthCheckPort: !Ref Port
