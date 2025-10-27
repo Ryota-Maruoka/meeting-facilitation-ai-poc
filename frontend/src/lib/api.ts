@@ -135,19 +135,16 @@ class ApiClient {
 
   // 会議管理
   async getMeetings(): Promise<Meeting[]> {
-    // 実APIから取得
     const data = await this.request<Record<string, unknown>[]>(`/meetings`);
     return (data ?? []).map(this.mapBackendMeetingToFrontend.bind(this));
   }
 
   async getMeeting(id: string): Promise<Meeting> {
-    // 実APIから取得
     const data = await this.request<Record<string, unknown>>(`/meetings/${id}`);
     return this.mapBackendMeetingToFrontend(data);
   }
 
   async createMeeting(data: MeetingCreate): Promise<Meeting> {
-    // 実APIへ作成リクエスト
     const payload = this.mapFrontendCreateToBackend(data);
     const created = await this.request<Record<string, unknown>>(`/meetings`, {
       method: "POST",
@@ -160,7 +157,7 @@ class ApiClient {
   async createMeetingWithId(data: MeetingCreateWithId): Promise<Meeting> {
     // IDを指定して会議を作成
     const payload = this.mapFrontendCreateToBackend(data);
-    payload.id = data.id; // IDを追加
+    payload.id = data.id;
     const created = await this.request<Record<string, unknown>>(`/meetings`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -194,7 +191,6 @@ class ApiClient {
   }
 
   async updateMeeting(id: string, data: Partial<Meeting> & { summary?: unknown }): Promise<Meeting> {
-    // 実APIへ更新リクエスト
     const payload = this.mapFrontendUpdateToBackend(data);
     const updated = await this.request<Record<string, unknown>>(`/meetings/${id}`, {
       method: "PUT",
@@ -248,7 +244,6 @@ class ApiClient {
 
   async transcribeAudio(meetingId: string, audioFile: File): Promise<Transcript> {
     const formData = new FormData();
-    // ファイル名を明示的に設定（ブラウザの互換性のため）
     formData.append("file", audioFile, audioFile.name);
 
     return this.request<Transcript>(`/meetings/${meetingId}/transcribe`, {
@@ -281,11 +276,13 @@ class ApiClient {
   }
 
   // 保留事項（Parking Lot）関連
-  async addParkingItem(meetingId: string, title: string): Promise<void> {
+  async addParkingItem(meetingId: string, content: string, addToNextAgenda: boolean = false): Promise<void> {
     await this.request(`/meetings/${meetingId}/parking`, {
       method: "POST",
       body: JSON.stringify({
-        title,
+        title: "", // タイトルは空（バックエンドで自動生成）
+        content,
+        addToNextAgenda,
       }),
     });
   }

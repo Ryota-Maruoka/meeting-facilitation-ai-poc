@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple
 
@@ -42,10 +43,7 @@ class AIDeviationService:
         self.api_version = settings.azure_openai_api_version_chat
         
         if not self.azure_endpoint or not self.api_key:
-            logger.warning("Azure OpenAI設定が不完全です。スタブモードで動作します。")
-            self.stub_mode = True
-        else:
-            self.stub_mode = False
+            logger.error("⚠️ Azure OpenAI設定が不完全です。endpoint と api_key を設定してください。")
     
     async def check_deviation(
         self,
@@ -79,11 +77,7 @@ class AIDeviationService:
             if not recent_text:
                 return self._create_no_text_result()
             
-            # スタブモードの場合は従来の手法を使用
-            if self.stub_mode:
-                return await self._check_deviation_stub(recent_text, agenda_titles, threshold)
-            
-            # AIベースの脱線検知を実行
+            # Azure OpenAI APIでAI脱線検知を実行
             return await self._check_deviation_ai(recent_text, agenda_titles, threshold)
             
         except Exception as e:
@@ -113,8 +107,7 @@ class AIDeviationService:
             
         except Exception as e:
             logger.error(f"Azure OpenAI API呼び出しエラー: {e}")
-            # フォールバック: 従来の手法を使用
-            return await self._check_deviation_stub(recent_text, agenda_titles, threshold)
+            raise  # エラーを上位に伝播
     
     def _build_deviation_prompt(self, recent_text: str, agenda_titles: List[str], threshold: float) -> str:
         """脱線検知用のプロンプトを構築"""
@@ -247,45 +240,6 @@ JSONのみを出力してください。
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
     
-    async def _check_deviation_stub(
-        self,
-        recent_text: str,
-        agenda_titles: List[str],
-        threshold: float
-    ) -> DeviationAnalysis:
-        """スタブモード（従来の手法）での脱線検知"""
-        
-        # 従来のJaccard係数ベースの類似度計算
-        from .deviation import similarity
-        
-        similarities = []
-        for agenda in agenda_titles:
-            sim = similarity(recent_text, agenda)
-            similarities.append((sim, agenda))
-        
-        similarities.sort(reverse=True)
-        best_similarity, best_agenda = similarities[0] if similarities else (0.0, "")
-        
-        is_deviation = best_similarity < threshold
-        suggested_agenda = [agenda for _, agenda in similarities[:2]]
-        
-        if is_deviation:
-            message = f"直近の発話がアジェンダ「{best_agenda}」から脱線している可能性があります（類似度: {best_similarity:.2f}）"
-        else:
-            message = f"アジェンダ「{best_agenda}」に沿った発話です（類似度: {best_similarity:.2f}）"
-        
-        return DeviationAnalysis(
-            is_deviation=is_deviation,
-            confidence=1.0 - best_similarity,
-            similarity_score=best_similarity,
-            best_agenda=best_agenda,
-            message=message,
-            suggested_agenda=suggested_agenda,
-            recent_text=recent_text,
-            reasoning="従来のJaccard係数ベースの分析（スタブモード）",
-            timestamp=datetime.now(timezone.utc).isoformat()
-        )
-    
     def _create_no_data_result(self) -> DeviationAnalysis:
         """データ不足時の結果"""
         return DeviationAnalysis(
@@ -327,7 +281,77 @@ JSONのみを出力してください。
             reasoning=f"処理エラー: {error_message}",
             timestamp=datetime.now(timezone.utc).isoformat()
         )
+    
+    async def generate_parking_title(self, deviation_text: str) -> str:
+        """
+        脱線内容から保留事項のタイトルを自動生成
+        
+        Args:
+            deviation_text: 脱線検知された発話内容
+            
+        Returns:
+            生成されたタイトル
+        """
+        logger.info(f"🔍 タイトル生成を開始: {deviation_text[:100]}...")
+        
+        try:
+            logger.info("✅ Azure OpenAI APIでタイトルを生成中...")
+            return await self._generate_title_ai(deviation_text)
+            
+        except Exception as e:
+            logger.error(f"❌ タイトル生成エラー: {e}", exc_info=True)
+            # エラー時は最初の10文字を返す
+            fallback_title = deviation_text[:10]
+            logger.warning(f"⚠️ エラー発生のためフォールバック: {fallback_title}")
+            return fallback_title
+    
+    async def _generate_title_ai(self, deviation_text: str) -> str:
+        """Azure OpenAI APIを使用してタイトルを生成"""
+        
+        prompt = f"""
+以下の会議中の発話内容から、簡潔で分かりやすい保留事項のタイトルを生成してください。
 
+## 発話内容
+{deviation_text}
+
+## 要件
+- タイトルは20文字以内で簡潔に
+- 発話内容の本質を捉えた表現
+- 日本語で自然な表現
+- 箇条書きや記号は使用しない
+
+## 出力形式
+タイトルのみを直接出力してください（JSON形式は使用しない）。
+例: PowerPoint出力時のフォントずれ対策
+"""
+        
+        response = await self._call_azure_openai(prompt)
+        logger.info(f"🔍 AI生レスポンス: {response}")
+        
+        # レスポンスからタイトルを抽出
+        title = response.strip()
+        
+        # {title: ...}形式の場合、タイトルを抽出
+        if title.startswith("{"):
+            # パターン1: title: "..." 形式（クォート付き）
+            match = re.search(r'title:\s*"([^"]*)"', title)
+            
+            if not match:
+                # パターン2: title: xxx} 形式（クォートなし）
+                # title: と } の間の内容を抽出
+                match = re.search(r'title:\s*([^}]+)', title)
+            
+            if match:
+                title = match.group(1).strip()
+                # 余分な記号や括弧を削除
+                title = title.rstrip('}').rstrip(',').strip()
+        
+        # クォートを削除
+        title = title.replace('"', '').replace("'", '').strip()
+        
+        logger.info(f"✅ 生成されたタイトル: {title}")
+        return title[:20]  # 最大20文字に制限
+    
 
 # シングルトンインスタンス
 ai_deviation_service = AIDeviationService()
