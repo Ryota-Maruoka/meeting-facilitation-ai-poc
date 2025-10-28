@@ -78,6 +78,7 @@ export default function MeetingActivePage() {
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
+  const [isAddingToParkingLot, setIsAddingToParkingLot] = useState<boolean>(false);
   const transcriptRef = useRef<LiveTranscriptAreaHandle | null>(null);
 
   // トースト通知
@@ -256,6 +257,10 @@ export default function MeetingActivePage() {
   };
 
   const handleDeviationAddToParkingLot = async (alertId: string, content: string, addToNextAgenda: boolean = false) => {
+    // ローディング開始
+    setIsAddingToParkingLot(true);
+    showSuccess("保留事項に追加中...");
+    
     try {
       await apiClient.addParkingItem(meetingId, content, addToNextAgenda);
       
@@ -274,6 +279,9 @@ export default function MeetingActivePage() {
     } catch (error) {
       console.error("保留事項の追加に失敗:", error);
       showSuccess("保留事項の追加に失敗しました");
+    } finally {
+      // ローディング終了
+      setIsAddingToParkingLot(false);
     }
   };
 
@@ -618,6 +626,7 @@ export default function MeetingActivePage() {
                             timestamp={timestamp}
                             onAddToParkingLot={(content, addToNextAgenda) => handleDeviationAddToParkingLot(alert.id, content, addToNextAgenda)}
                             onDismiss={() => handleDeviationIgnore(alert.id)}
+                            isLoading={isAddingToParkingLot}
                           />
                         </div>
                       );

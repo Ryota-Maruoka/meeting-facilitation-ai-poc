@@ -6,6 +6,7 @@ import {
   Box,
   Typography,
   Button,
+  CircularProgress,
 } from "@mui/material";
 import {
   Warning as WarningIcon,
@@ -19,6 +20,7 @@ type DeviationAlertProps = {
   onAddToParkingLot?: (topic: string, addToNextAgenda: boolean) => void;
   onDismiss?: () => void;
   timestamp?: string;
+  isLoading?: boolean;
 };
 
 /**
@@ -34,6 +36,7 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
   onAddToParkingLot,
   onDismiss,
   timestamp,
+  isLoading = false,
 }) => {
   const handleAddToParkingLot = () => {
     // タイトルなしでコンテンツのみ送信（バックエンドで自動生成）
@@ -75,11 +78,12 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
           <Button
             variant="contained"
             size="small"
-            startIcon={<ParkingIcon />}
+            startIcon={isLoading ? <CircularProgress size={16} /> : <ParkingIcon />}
             onClick={handleAddToParkingLot}
+            disabled={isLoading}
             sx={{ bgcolor: "#ff9800", "&:hover": { bgcolor: "#f57c00" } }}
           >
-            保留事項に追加
+            {isLoading ? "保留事項に追加中..." : "保留事項に追加"}
           </Button>
           
           <Button
@@ -87,6 +91,7 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
             size="small"
             startIcon={<CloseIcon />}
             onClick={handleDismiss}
+            disabled={isLoading}
           >
             無視
           </Button>

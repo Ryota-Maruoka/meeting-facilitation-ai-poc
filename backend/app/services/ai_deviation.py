@@ -300,8 +300,8 @@ JSONのみを出力してください。
             
         except Exception as e:
             logger.error(f"❌ タイトル生成エラー: {e}", exc_info=True)
-            # エラー時は最初の10文字を返す
-            fallback_title = deviation_text[:10]
+            # エラー時は最初の20文字を返す
+            fallback_title = deviation_text[:20]
             logger.warning(f"⚠️ エラー発生のためフォールバック: {fallback_title}")
             return fallback_title
     
@@ -315,7 +315,7 @@ JSONのみを出力してください。
 {deviation_text}
 
 ## 要件
-- タイトルは20文字以内で簡潔に
+- タイトルは30文字以内で簡潔に
 - 発話内容の本質を捉えた表現
 - 日本語で自然な表現
 - 箇条書きや記号は使用しない
@@ -330,28 +330,25 @@ JSONのみを出力してください。
         
         # レスポンスからタイトルを抽出
         title = response.strip()
-        
-        # {title: ...}形式の場合、タイトルを抽出
-        if title.startswith("{"):
-            # パターン1: title: "..." 形式（クォート付き）
-            match = re.search(r'title:\s*"([^"]*)"', title)
-            
-            if not match:
-                # パターン2: title: xxx} 形式（クォートなし）
-                # title: と } の間の内容を抽出
-                match = re.search(r'title:\s*([^}]+)', title)
-            
+
+        # 1️⃣ JSON風 { "title": "..." } or {title: ...} 対応
+        match = re.search(r'[\"\']?title[\"\']?\s*[:：]\s*[\"\']?([^\"\'{}]+)[\"\']?', title)
+        if match:
+            title = match.group(1).strip()
+        else:
+            # 2️⃣ 「タイトル: ...」や単純出力にも対応
+            match = re.search(r'タイトル\s*[:：]\s*(.+)', title)
             if match:
                 title = match.group(1).strip()
-                # 余分な記号や括弧を削除
-                title = title.rstrip('}').rstrip(',').strip()
-        
-        # クォートを削除
-        title = title.replace('"', '').replace("'", '').strip()
-        
+            else:
+                # 3️⃣ それ以外はそのまま出力
+                title = title
+
+        # 4️⃣ クォートなどを削除
+        title = title.replace('"', '').replace("'", '').replace("{", "").replace("}", "").strip()
+
         logger.info(f"✅ 生成されたタイトル: {title}")
-        return title[:20]  # 最大20文字に制限
-    
+        return title[:30]    
 
 # シングルトンインスタンス
 ai_deviation_service = AIDeviationService()
