@@ -1,34 +1,43 @@
 # ===== deps =====
 FROM --platform=linux/amd64 public.ecr.aws/docker/library/node:20-bullseye-slim AS deps
-WORKDIR /app
-# 任意のロックファイルに対応（存在しないものは無視）
-COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./ 2>/dev/null || true
+WORKDIR /app/frontend
+
+# 任意のロックファイルに対応（無いものは無視）
+COPY frontend/package.json frontend/package-lock.json* frontend/pnpm-lock.yaml* frontend/yarn.lock* ./ 2>/dev/null || true
+
+# パッケージマネージャ判定
 RUN \
   if [ -f pnpm-lock.yaml ]; then corepack enable && corepack prepare pnpm@latest --activate && pnpm i --frozen-lockfile; \
   elif [ -f yarn.lock ]; then corepack enable && corepack prepare yarn@stable --activate && yarn --frozen-lockfile; \
-  else npm ci; fi
+  elif [ -f package-lock.json ]; then npm ci; \
+  else npm i; fi
 
 # ===== builder =====
 FROM --platform=linux/amd64 public.ecr.aws/docker/library/node:20-bullseye-slim AS builder
-WORKDIR /app
+WORKDIR /app/frontend
 ENV CI=true
-COPY --from=deps /app/node_modules ./node_modules
-# アプリ本体（frontend コンテキスト）をコピー
-COPY . .
-# 公開用の env はビルド時に埋め込み
+
+# 依存を先にコピー（キャッシュ有効化）
+COPY --from=deps /app/frontend/node_modules ./node_modules
+# アプリ本体をコピー（context=repo直下のため frontend/ を明示）
+COPY frontend/ ./
+
+# ビルド時に公開変数を埋め込み（NEXT_PUBLIC_）
 ARG NEXT_PUBLIC_API_URL="/backend-api"
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build
 
 # ===== runner =====
 FROM --platform=linux/amd64 public.ecr.aws/docker/library/node:20-bullseye-slim AS runner
-WORKDIR /app
+WORKDIR /app/frontend
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# 実行に必要な成果物のみ配置
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY package.json package-lock.json* ./ 2>/dev/null || true
+
+# 実行に必要な最小物のみ
+COPY --from=builder /app/frontend/node_modules ./node_modules
+COPY --from=builder /app/frontend/.next ./.next
+COPY --from=builder /app/frontend/public ./public
+COPY frontend/package.json frontend/package-lock.json* ./ 2>/dev/null || true
+
 EXPOSE 3000
 CMD ["npm","run","start","--","-p","3000","-H","0.0.0.0"]
