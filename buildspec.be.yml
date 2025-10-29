@@ -1,0 +1,70 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_REGION: ap-northeast-1
+    REPO: bemac-be
+    ARTIFACT_BUCKET: codebuild-artifacts-111938288341-ap-northeast-1
+    ARTIFACT_PREFIX: bemac-be
+  exported-variables:
+    - IMAGE_TAG
+
+phases:
+  install:
+    commands:
+      - echo "== Install phase (BE) =="
+      - docker version
+      - aws --version
+      - echo "whoami=$(whoami)  hostname=$(hostname)"
+
+  pre_build:
+    commands:
+      - echo "== Login to ECR =="
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO}
+      - aws ecr describe-repositories --repository-names "${REPO}" >/dev/null 2>&1 || aws ecr create-repository --repository-name "${REPO}" >/dev/null
+      - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
+      - IMAGE_TAG=prod-$(date +%Y%m%d-%H%M)
+      - echo "IMAGE_TAG=${IMAGE_TAG}"
+      - echo "ECR_URI=${ECR_URI}"
+      # ベースは ECR Public の python:3.12-slim を使用（レート制限回避）
+      - timeout 60 docker pull public.ecr.aws/docker/library/python:3.12-slim || true
+
+  build:
+    commands:
+      - printf '' > build.log
+      - |
+        bash -lc 'set -euo pipefail; set -x;
+        echo "== Docker build (BE) ==" | tee -a build.log;
+        # BuildKitは使わない（レガシー互換）
+        export DOCKER_BUILDKIT=0;
+        docker build \
+          -f .github/docker/api/Dockerfile \
+          -t ${REPO}:${IMAGE_TAG} \
+          . 2>&1 | tee -a build.log'
+
+  post_build:
+    commands:
+      - echo "== Tag & Push (only if image exists) =="
+      - |
+        if docker image inspect ${REPO}:${IMAGE_TAG} > /dev/null 2>&1; then
+          docker tag ${REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+          docker push ${ECR_URI}:${IMAGE_TAG}
+          printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
+        else
+          echo "Image not found. Skipping tag/push."
+          printf '{"imageTag":""}' > image.json
+        fi
+      - echo "== Upload build.log / image.json to S3 =="
+      - |
+        BUILD_ID_SAFE=$(echo "$CODEBUILD_BUILD_ID" | tr "/" "_")
+        PREFIX="${ARTIFACT_PREFIX}/${BUILD_ID_SAFE}"
+        echo "Uploading to s3://${ARTIFACT_BUCKET}/${PREFIX}/"
+        aws s3 cp build.log "s3://${ARTIFACT_BUCKET}/${PREFIX}/build.log" || true
+        aws s3 cp image.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/image.json" || true
+
+artifacts:
+  files:
+    - image.json
+    - build.log
+  discard-paths: yes
