@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os  # 追加
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -30,7 +31,17 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Facilitation AI PoC API...")
 
 
-app = FastAPI(title="Facilitation AI PoC API", lifespan=lifespan)
+# 外部公開のベースパス。環境変数が無ければ /backend-api を既定にする
+ROOT_PATH = os.getenv("ROOT_PATH", "/backend-api")
+
+# FastAPI を /backend-api 配下で公開し、Swagger / OpenAPI のURLも揃える
+app = FastAPI(
+    title="Facilitation AI PoC API",
+    lifespan=lifespan,
+    root_path=ROOT_PATH,
+    docs_url="/docs",
+    openapi_url="/openapi.json",
+)
 
 app.add_middleware(
     CORSMiddleware,
