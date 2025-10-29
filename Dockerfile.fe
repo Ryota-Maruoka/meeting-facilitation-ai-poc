@@ -1,0 +1,26 @@
+# ===== deps =====
+FROM --platform=linux/amd64 node:20-bullseye-slim AS deps
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json* frontend/pnpm-lock.yaml* frontend/yarn.lock* ./ 2>/dev/null || true
+RUN \
+  if [ -f pnpm-lock.yaml ]; then corepack enable && corepack prepare pnpm@latest --activate && pnpm i --frozen-lockfile; \
+  elif [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  else npm ci; fi
+
+# ===== builder =====
+FROM --platform=linux/amd64 node:20-bullseye-slim AS builder
+WORKDIR /app/frontend
+ENV CI=true
+COPY frontend/ ./
+COPY --from=deps /app/frontend/node_modules ./node_modules
+ARG NEXT_PUBLIC_API_URL="/backend-api"
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+RUN npm run build
+
+# ===== runner =====
+FROM --platform=linux/amd64 node:20-bullseye-slim AS runner
+WORKDIR /app/frontend
+ENV NODE_ENV=production
+COPY --from=builder /app/frontend ./
+EXPOSE 3000
+CMD ["npm","run","start","--","-p","3000","-H","0.0.0.0"]
