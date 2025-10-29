@@ -78,6 +78,7 @@ export default function MeetingActivePage() {
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
   const [endModalOpen, setEndModalOpen] = useState<boolean>(false);
   const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
+  const [isAddingToParkingLot, setIsAddingToParkingLot] = useState<boolean>(false);
   const transcriptRef = useRef<LiveTranscriptAreaHandle | null>(null);
 
   // トースト通知
@@ -255,15 +256,32 @@ export default function MeetingActivePage() {
     showSuccess("軌道修正して議題に戻しました");
   };
 
-  const handleDeviationAddToParkingLot = async (alertId: string, topic: string) => {
+  const handleDeviationAddToParkingLot = async (alertId: string, content: string, addToNextAgenda: boolean = false) => {
+    // ローディング開始
+    setIsAddingToParkingLot(true);
+    showSuccess("保留事項に追加中...");
+    
     try {
-      await apiClient.addParkingItem(meetingId, topic);
-      handleAddToParkingLot(alertId, topic);
-      setParkingLot([...parkingLot, topic]);
+      await apiClient.addParkingItem(meetingId, content, addToNextAgenda);
+      
+      // 保留事項一覧を再取得（AI生成されたタイトルを含む）
+      const parkingItems = await apiClient.getParkingItems(meetingId);
+      const latestTitle = parkingItems[parkingItems.length - 1]?.title || "";
+      
+      console.log("🤖 AI生成されたタイトル:", latestTitle);
+      
+      // AI生成されたタイトルを渡す
+      handleAddToParkingLot(alertId, latestTitle);
+      
+      setParkingLot(parkingItems.map(item => item.title));
+      
       showSuccess("保留事項に追加しました");
     } catch (error) {
       console.error("保留事項の追加に失敗:", error);
       showSuccess("保留事項の追加に失敗しました");
+    } finally {
+      // ローディング終了
+      setIsAddingToParkingLot(false);
     }
   };
 
@@ -591,20 +609,28 @@ export default function MeetingActivePage() {
               <div className="section-content alerts-container">
                 {alerts.length > 0 ? (
                   <div className="alerts-list">
-                    {alerts.map((alert) => (
-                      <div key={alert.id} className="alert-item">
-                        <DeviationAlert
-                          alert={alert}
-                          onMarkAsRelated={() => handleDeviationMarkAsRelated(alert.id)}
-                          onReturnToAgenda={() => handleDeviationReturnToAgenda(alert.id)}
-                          onAddToParkingLot={(topic) => handleDeviationAddToParkingLot(alert.id, topic)}
-                          onDismiss={() => handleDeviationIgnore(alert.id)}
-                        />
-                        <div className="alert-timestamp">
-                          {new Date(alert.timestamp).toLocaleTimeString()}
+                    {alerts.map((alert) => {
+                      // 録音開始からの経過時間を計算（MM:SS形式）
+                      const alertTime = new Date(alert.timestamp);
+                      const meetingStart = meetingStartTime || new Date();
+                      const elapsedMs = alertTime.getTime() - meetingStart.getTime();
+                      const elapsedSeconds = Math.floor(elapsedMs / 1000);
+                      const minutes = Math.floor(elapsedSeconds / 60);
+                      const seconds = elapsedSeconds % 60;
+                      const timestamp = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+                      
+                      return (
+                        <div key={alert.id} className="alert-item">
+                          <DeviationAlert
+                            alert={alert}
+                            timestamp={timestamp}
+                            onAddToParkingLot={(content, addToNextAgenda) => handleDeviationAddToParkingLot(alert.id, content, addToNextAgenda)}
+                            onDismiss={() => handleDeviationIgnore(alert.id)}
+                            isLoading={isAddingToParkingLot}
+                          />
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {alerts.length > 3 && (
                       <div className="alerts-clear-all">
                         <button 

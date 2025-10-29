@@ -99,7 +99,7 @@ export type DeviationAlert = {
   suggestedTopics: string[]; // suggested_agenda から suggestedTopics に変更
   recent_text: string;
   created_at: string; // timestamp から created_at に変更
-  timestamp: string; // アラート生成時刻を追加
+  timestamp: string;
 };
 
 // 会議後サマリ

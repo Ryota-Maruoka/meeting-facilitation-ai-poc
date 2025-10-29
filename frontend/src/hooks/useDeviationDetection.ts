@@ -22,7 +22,7 @@ type UseDeviationDetectionReturn = {
   checkDeviation: () => Promise<void>;
   handleMarkAsRelated: (alertId: string) => void;
   handleReturnToAgenda: (alertId: string) => void;
-  handleAddToParkingLot: (alertId: string, topic: string) => void;
+  handleAddToParkingLot: (alertId: string, title: string) => void;
   handleIgnoreDeviation: (alertId: string) => void;
   clearAllAlerts: () => void;
   addTestAlert: (override?: Partial<DeviationAlert>) => void; // 🧪 テスト用アラート追加
@@ -58,6 +58,8 @@ export const useDeviationDetection = ({
       
       if (deviationResult.is_deviation) {
         console.log("⚠️ 脱線を検知:", deviationResult);
+        console.log(`📊 連続脱線回数: ${consecutiveDeviations + 1}回`);
+        console.log(`💬 検知内容: "${deviationResult.recent_text}"`);
         setConsecutiveDeviations(prev => prev + 1);
         
         // TODO: 何回以上か検討
@@ -69,9 +71,13 @@ export const useDeviationDetection = ({
             timestamp: new Date().toISOString(),
           };
           setAlerts(prev => [...prev, newAlert]);
+          console.log("🚨 アラートを追加:", newAlert.id);
+        } else {
+          console.log("⏳ 連続脱線回数不足（アラートを追加しません）");
         }
       } else {
-        console.log("✅ アジェンダに沿った発話:", deviationResult);
+        console.log("✅ アジェンダに沿った発話");
+        console.log(`💡 類似度: ${deviationResult.similarity.toFixed(2)}`);
         setConsecutiveDeviations(0); // リセット
       }
     } catch (error) {
@@ -99,34 +105,33 @@ export const useDeviationDetection = ({
 
   // 脱線アラートのアクション処理
   const handleMarkAsRelated = useCallback((alertId: string) => {
-    console.log("アジェンダに関連しているとマーク:", alertId);
+    console.log("✅ アジェンダに関連しているとマーク:", alertId);
     setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
     // TODO: AIの学習データに「関連」として記録
   }, []);
 
   const handleReturnToAgenda = useCallback((alertId: string) => {
-    console.log("軌道修正して議題に戻す:", alertId);
+    console.log("🔄 軌道修正して議題に戻す:", alertId);
     setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
     // TODO: 実際の議題に戻す処理を実装
   }, []);
 
-  const handleAddToParkingLot = useCallback((alertId: string, topic: string) => {
-    console.log("保留事項に追加:", alertId, topic);
+  const handleAddToParkingLot = useCallback((alertId: string, title: string) => {
+    console.log("🚗 保留事項に追加:", alertId, title);
     setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
-    // TODO: 保留事項に追加する処理を実装
   }, []);
 
   const handleIgnoreDeviation = useCallback((alertId: string) => {
-    console.log("脱線を無視:", alertId);
+    console.log("🚫 脱線を無視:", alertId);
     setAlerts(prev => prev.filter(alert => alert.id !== alertId));
     setConsecutiveDeviations(0); // リセット
   }, []);
 
   const clearAllAlerts = useCallback(() => {
-    console.log("すべてのアラートをクリア");
+    console.log("🗑️ すべてのアラートをクリア");
     setAlerts([]);
     setConsecutiveDeviations(0);
   }, []);
@@ -142,12 +147,14 @@ export const useDeviationDetection = ({
       best_agenda: "JWT方式の検討",
       message: "直近の会話がアジェンダから逸脱している可能性があります",
       suggestedTopics: ["認証方式の比較に戻る", "セキュリティ要件の確認"],
-      recent_text: "昨日の野球の試合が…",
+      recent_text: "レポートといえば、出力フォーマットをPDFだけじゃなくてPowerPointでも出せたら便利です。……あ、でも欲張りすぎですかね？PowerPoint出力は可能ですよ。実は前職で似た仕組みを作ったことがあって。ただ、そのときは“フォントがずれる問題”で、地味に炎上しました（笑）それは避けたいですね。開発チームのトラウマ案件になりそう。フォントずれって、なんであんなに起こるんでしょうね？私の家のプリンタでも、Wordの文字がズレて…。たまに“印刷の神様”に祈ってます（笑）それはもう、ドライバのせいですね（笑）。うちのチームにも“ドライバ信仰”の人が一人います。……はい、ちょっと話が脱線しましたね（笑）。",
       created_at: now,
       timestamp: now,
     };
     const alert = { ...base, ...override, id: base.id };
     setAlerts(prev => [...prev, alert]);
+    console.log("🧪 テストアラートを追加:", alert.id);
+    console.log("💬 recent_text:", alert.recent_text);
   }, []);
 
   return {

@@ -6,6 +6,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ..schemas.parking import ParkingItem
+from ..services.ai_deviation import ai_deviation_service
 from ..storage import DataStore
 from ..settings import settings
 
@@ -17,7 +18,7 @@ store = DataStore(settings.data_dir)
 
 
 @router.post("/parking")
-def add_parking(meeting_id: str, item: ParkingItem) -> dict:
+async def add_parking(meeting_id: str, item: ParkingItem) -> dict:
     """Parking Lotアイテムを追加する。
 
     Args:
@@ -37,6 +38,13 @@ def add_parking(meeting_id: str, item: ParkingItem) -> dict:
     # parkingフィールドが存在しない場合は初期化
     if "parking" not in meeting:
         meeting["parking"] = []
+    
+    # タイトルをAIで自動生成（contentから生成）
+    if item.content:
+        logger.info(f"🔍 タイトルをAIで自動生成します。content: {item.content[:100]}...")
+        title = await ai_deviation_service.generate_parking_title(item.content)
+        logger.info(f"🤖 AI生成されたtitle: {title}")
+        item.title = title
     
     meeting["parking"].append(item.model_dump())
     store.save_meeting(meeting_id, meeting)

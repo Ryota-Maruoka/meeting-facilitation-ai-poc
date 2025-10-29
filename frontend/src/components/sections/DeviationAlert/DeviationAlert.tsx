@@ -6,6 +6,7 @@ import {
   Box,
   Typography,
   Button,
+  CircularProgress,
 } from "@mui/material";
 import {
   Warning as WarningIcon,
@@ -16,8 +17,10 @@ import type { DeviationAlert } from "@/lib/types";
 
 type DeviationAlertProps = {
   alert: DeviationAlert;
-  onAddToParkingLot?: (topic: string) => void;
+  onAddToParkingLot?: (topic: string, addToNextAgenda: boolean) => void;
   onDismiss?: () => void;
+  timestamp?: string;
+  isLoading?: boolean;
 };
 
 /**
@@ -32,9 +35,12 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
   alert,
   onAddToParkingLot,
   onDismiss,
+  timestamp,
+  isLoading = false,
 }) => {
   const handleAddToParkingLot = () => {
-    onAddToParkingLot?.(alert.message);
+    // タイトルなしでコンテンツのみ送信（バックエンドで自動生成）
+    onAddToParkingLot?.(alert.recent_text, false);
   };
 
   const handleDismiss = () => {
@@ -53,6 +59,13 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
       }}
     >
       <Box>
+        {/* タイムスタンプ表示（録音開始からの経過時間） */}
+        {timestamp && (
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
+            {timestamp}
+          </Typography>
+        )}
+        
         {/* 検知した発話内容 */}
         {alert.recent_text && (
           <Typography variant="body2" sx={{ mb: 2, fontStyle: "italic" }}>
@@ -65,11 +78,12 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
           <Button
             variant="contained"
             size="small"
-            startIcon={<ParkingIcon />}
+            startIcon={isLoading ? <CircularProgress size={16} /> : <ParkingIcon />}
             onClick={handleAddToParkingLot}
+            disabled={isLoading}
             sx={{ bgcolor: "#ff9800", "&:hover": { bgcolor: "#f57c00" } }}
           >
-            保留事項に追加
+            {isLoading ? "保留事項に追加中..." : "保留事項に追加"}
           </Button>
           
           <Button
@@ -77,6 +91,7 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
             size="small"
             startIcon={<CloseIcon />}
             onClick={handleDismiss}
+            disabled={isLoading}
           >
             無視
           </Button>

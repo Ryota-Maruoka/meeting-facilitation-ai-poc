@@ -11,7 +11,8 @@ class ParkingItem(BaseModel):
     """Parking Lotアイテム"""
     
     id: str = Field(default_factory=lambda: str(uuid4()))
-    title: str
+    title: str = ""
     content: str = ""
+    addToNextAgenda: bool = False
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
