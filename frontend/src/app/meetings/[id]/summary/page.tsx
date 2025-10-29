@@ -94,6 +94,9 @@ export default function MeetingSummaryPage() {
           };
         }
 
+        // APIから会議データを取得
+        const meeting = await apiClient.getMeeting(meetingId);
+
         // APIから要約データを取得
         setIsLoadingSummary(true);
         const summary = await apiClient.getSummary(meetingId);
@@ -104,8 +107,29 @@ export default function MeetingSummaryPage() {
         const transcripts = await apiClient.getTranscripts(meetingId);
         setIsLoadingTranscripts(false);
 
+        // APIから保留事項（Parking Lot）を取得（タイトルのみ使用）
+        const parkingItems = await apiClient.getParkingItems(meetingId);
+
+        // 実施時間を計算（started_atとended_atから）
+        let actualDuration = basicInfo.duration;
+        let actualStartTime = basicInfo.startTime;
+        if (meeting.started_at && meeting.ended_at) {
+          const start = new Date(meeting.started_at);
+          const end = new Date(meeting.ended_at);
+          const durationMs = end.getTime() - start.getTime();
+          const durationMinutes = Math.floor(durationMs / 60000);
+          actualDuration = `${durationMinutes}分`;
+          
+          // 開始時刻をフォーマット
+          const hours = String(start.getHours()).padStart(2, '0');
+          const minutes = String(start.getMinutes()).padStart(2, '0');
+          actualStartTime = `${hours}:${minutes}`;
+        }
+
         setSummaryData({
           ...basicInfo,
+          duration: actualDuration,
+          startTime: actualStartTime,
           overallSummary: summary?.summary || "要約データがありません",
           keyPoints: [],
           decisions: summary?.decisions || [],
@@ -115,7 +139,7 @@ export default function MeetingSummaryPage() {
             assignee: action.owner || "",
             dueDate: action.due || "",
           })),
-          parkingLot: [],
+          parkingLot: (parkingItems || []).map((p: any) => p.title).filter((t: string) => !!t),
           transcripts: transcripts.map((t: any) => ({
             text: t.text,
             timestamp: t.timestamp,
@@ -259,11 +283,11 @@ export default function MeetingSummaryPage() {
             </div>
           </div>
 
-          {/* 右カラム: 決定事項・未決事項・アクションアイテム */}
+          {/* 右カラム: 決定事項・未決事項・アクションアイテム・保留事項 */}
           <div className="column-section">
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.CHECK}</span>
-              <span>決定事項・未決事項・アクション</span>
+              <span>決定事項・未決事項・アクション・保留事項</span>
             </div>
             <div className="column-content">
               {isLoadingSummary ? (
@@ -321,6 +345,22 @@ export default function MeetingSummaryPage() {
                       ))
                     ) : (
                       <div style={{ color: "#6b7280", fontSize: "14px" }}>アクションアイテムはありません</div>
+                    )}
+                  </div>
+
+                  {/* 保留事項（Parking Lot） */}
+                  <div style={{ marginTop: "24px" }}>
+                    <div style={{ fontWeight: 600, marginBottom: "12px", color: "#1f2937", fontSize: "14px" }}>
+                      保留事項
+                    </div>
+                    {summaryData.parkingLot.length > 0 ? (
+                      summaryData.parkingLot.map((item, index) => (
+                        <div key={index} className="parking-item" style={{ marginBottom: "8px", paddingLeft: "12px", borderLeft: "3px solid #f97316" }}>
+                          <div className="item-title">{item}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: "#6b7280", fontSize: "14px" }}>保留事項はありません</div>
                     )}
                   </div>
                 </>
