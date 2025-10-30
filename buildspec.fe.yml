@@ -77,7 +77,7 @@ phases:
 
       - printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
       # ECS CodePipeline 用のイメージ定義ファイルを生成
-      - printf '[{"name":"bemac-fe","imageUri":"%s"}]' "${ECR_URI}:${IMAGE_TAG}" > imagedefinitions.json
+      - printf '[{"name":"frontend","imageUri":"%s"}]' "${ECR_URI}:${IMAGE_TAG}" > imagedefinitions.json
       - echo "== Upload build.log / image.json to S3 =="
       - |
         BUILD_ID_SAFE=$(echo "$CODEBUILD_BUILD_ID" | tr "/" "_" )
