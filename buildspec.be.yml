@@ -34,14 +34,20 @@ phases:
     commands:
       - printf '' > build.log
       - |
-        bash -lc 'set -euo pipefail; set -x;
-        echo "== Docker build (BE) ==" | tee -a build.log;
-        # BuildKitは使わない（レガシー互換）
-        export DOCKER_BUILDKIT=0;
-        docker build \
-          -f .github/docker/api/Dockerfile \
-          -t ${REPO}:${IMAGE_TAG} \
-          . 2>&1 | tee -a build.log'
+        bash -lc '
+          set -euo pipefail; set -x
+          echo "== Dockerfile header (.github/docker/api/Dockerfile) ==" | tee -a build.log
+          sed -n "1,80p" .github/docker/api/Dockerfile | tee -a build.log
+
+          echo "== Docker build (context = repo root) ==" | tee -a build.log
+          export DOCKER_BUILDKIT=1
+          docker build \
+            -f .github/docker/api/Dockerfile \
+            -t ${REPO}:${IMAGE_TAG} \
+            --progress=plain \
+            . 2>&1 | tee -a build.log
+        '
+      - tail -n 200 build.log || true
 
   post_build:
     commands:
