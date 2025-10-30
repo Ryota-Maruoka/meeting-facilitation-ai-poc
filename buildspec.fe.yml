@@ -13,7 +13,7 @@ env:
     # -----------------------------------------------------
     # - BACKEND_API_URL: Next.js のリライト先URL（ALBまたはFastAPIエンドポイント）
     # - NEXT_PUBLIC_API_URL: クライアント直叩き用の相対パス（デフォルト /backend-api）
-    BACKEND_API_URL: "http://54.250.241.155:8000"
+    BACKEND_API_URL: "https://bemac-meeting-fe-alb-1103801797.ap-northeast-1.elb.amazonaws.com"
     NEXT_PUBLIC_API_URL: "/backend-api"
 
     # -----------------------------------------------------

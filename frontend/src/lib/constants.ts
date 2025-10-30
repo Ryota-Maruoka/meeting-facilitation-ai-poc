@@ -5,7 +5,7 @@
  */
 
 // API設定
-// 本番環境: Vercelリライト経由でEC2バックエンドにプロキシ (/backend-api → http://54.250.241.155:8000)
+// 本番環境: リライト/プロキシは環境変数の BACKEND_API_URL または NEXT_PUBLIC_API_URL を参照
 // 開発環境: ローカルバックエンド (http://localhost:8000)
 // 環境変数 NEXT_PUBLIC_API_URL で上書き可能
 const getApiBaseUrl = () => {
