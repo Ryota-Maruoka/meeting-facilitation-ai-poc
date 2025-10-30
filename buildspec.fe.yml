@@ -30,7 +30,6 @@ phases:
       - echo "ECR_URI=${ECR_URI}"
       - echo "BACKEND_API_URL=${BACKEND_API_URL}"
       - echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}"
-      # --- diagnostics (optional) ---
       - echo "== Connectivity check to ECR Public =="
       - timeout 10 bash -lc 'getent hosts public.ecr.aws || true'
       - timeout 15 bash -lc 'curl -I https://public.ecr.aws/v2/ || true'
@@ -48,10 +47,10 @@ phases:
           echo "---" | tee -a build.log
           find . -maxdepth 2 -type d -print | tee -a build.log
 
-          echo "== Dockerfile header (should show public.ecr.aws) ==" | tee -a build.log
-          sed -n "1,24p" Dockerfile.fe | tee -a build.log
+          echo "== Dockerfile header (root/Dockerfile.fe) ==" | tee -a build.log
+          sed -n "1,40p" Dockerfile.fe | tee -a build.log
 
-          echo "== Docker build (Dockerfile at repo root, context=repo root) ==" | tee -a build.log
+          echo "== Docker build (context = repo root) ==" | tee -a build.log
           export DOCKER_BUILDKIT=1
           docker build \
             -f Dockerfile.fe \
