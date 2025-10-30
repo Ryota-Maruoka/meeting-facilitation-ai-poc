@@ -9,12 +9,17 @@ FROM public.ecr.aws/docker/library/node:24-bullseye-slim AS base
 FROM base AS builder
 WORKDIR /app
 
+# ----------------------------------------------------- #
 # 依存関係のインストール
-COPY package*.json ./
+# ----------------------------------------------------- #
+# ※ CodeBuild のコンテキストはリポジトリ直下なので、frontend 配下を明示
+COPY frontend/package*.json ./
 RUN npm ci --verbose --no-audit --no-fund
 
+# ----------------------------------------------------- #
 # ソースコードのコピー
-COPY . .
+# ----------------------------------------------------- #
+COPY frontend/ ./
 
 # ----------------------------------------------------- #
 # ビルド時の環境変数（Next.js のビルドに必要）
@@ -28,7 +33,9 @@ ENV NODE_ENV=production \
     NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
     BACKEND_API_URL=${BACKEND_API_URL}
 
+# ----------------------------------------------------- #
 # Standaloneビルド（Next.js 13+）
+# ----------------------------------------------------- #
 RUN npm run build
 
 # ----------------------------------------------------- #
@@ -43,11 +50,10 @@ ENV NODE_ENV=production \
     PORT=3000 \
     BACKEND_API_URL=${BACKEND_API_URL}
 
-# Standaloneビルド成果物のコピー
+# Standaloneビルドの成果物をコピー
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
 EXPOSE 3000
 
-# Next.js standalone server 起動
 CMD ["node", "server.js"]
