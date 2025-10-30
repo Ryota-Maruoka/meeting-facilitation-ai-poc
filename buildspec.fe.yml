@@ -2,12 +2,26 @@ version: 0.2
 
 env:
   variables:
+    # -----------------------------------------------------
+    # 基本設定
+    # -----------------------------------------------------
     AWS_REGION: ap-northeast-1
     REPO: bemac-fe
-    NEXT_PUBLIC_API_URL: /backend-api
-    BACKEND_API_URL: http://54.250.241.155:8000
+
+    # -----------------------------------------------------
+    # Next.js ビルド時の環境変数
+    # -----------------------------------------------------
+    # - BACKEND_API_URL: Next.js のリライト先URL（ALBまたはFastAPIエンドポイント）
+    # - NEXT_PUBLIC_API_URL: クライアント直叩き用の相対パス（デフォルト /backend-api）
+    BACKEND_API_URL: "http://54.250.241.155:8000"
+    NEXT_PUBLIC_API_URL: "/backend-api"
+
+    # -----------------------------------------------------
+    # S3 出力関連（任意）
+    # -----------------------------------------------------
     ARTIFACT_BUCKET: "codebuild-artifacts-111938288341-ap-northeast-1"
     ARTIFACT_PREFIX: "bemac-fe"
+
   exported-variables:
     - IMAGE_TAG
 
@@ -17,7 +31,7 @@ phases:
       - echo "== Install phase =="
       - docker version
       - aws --version
-      - echo "whoami=$(whoami)  hostname=$(hostname)"
+      - echo "whoami=$(whoami) hostname=$(hostname)"
 
   pre_build:
     commands:
@@ -30,11 +44,6 @@ phases:
       - echo "ECR_URI=${ECR_URI}"
       - echo "BACKEND_API_URL=${BACKEND_API_URL}"
       - echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}"
-      - echo "== Connectivity check to ECR Public =="
-      - timeout 10 bash -lc 'getent hosts public.ecr.aws || true'
-      - timeout 15 bash -lc 'curl -I https://public.ecr.aws/v2/ || true'
-      - echo "== Try pulling base image from ECR Public (diagnostic only) =="
-      - timeout 120 docker pull public.ecr.aws/docker/library/node:20-bullseye-slim || echo "[WARN] pull failed (see above)"
 
   build:
     commands:
@@ -43,20 +52,18 @@ phases:
         bash -lc '
           set -euo pipefail; set -x
           echo "== Show tree (top 2 levels) ==" | tee -a build.log
-          ls -la | tee -a build.log
-          echo "---" | tee -a build.log
           find . -maxdepth 2 -type d -print | tee -a build.log
 
-          echo "== Dockerfile header (root/Dockerfile.fe) ==" | tee -a build.log
-          sed -n "1,40p" Dockerfile.fe | tee -a build.log
+          echo "== Dockerfile header (.github/docker/web/Dockerfile) ==" | tee -a build.log
+          sed -n "1,40p" .github/docker/web/Dockerfile | tee -a build.log
 
           echo "== Docker build (context = repo root) ==" | tee -a build.log
           export DOCKER_BUILDKIT=1
           docker build \
-            -f Dockerfile.fe \
+            -f .github/docker/web/Dockerfile \
             -t ${REPO}:${IMAGE_TAG} \
-            --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
             --build-arg BACKEND_API_URL="${BACKEND_API_URL}" \
+            --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
             --progress=plain \
             . 2>&1 | tee -a build.log
         '
@@ -64,20 +71,16 @@ phases:
 
   post_build:
     commands:
-      - echo "== Tag & Push (only if image exists) =="
-      - |
-        if docker image inspect ${REPO}:${IMAGE_TAG} > /dev/null 2>&1; then
-          docker tag ${REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
-          docker push ${ECR_URI}:${IMAGE_TAG}
-          printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
-        else
-          echo "Image not found. Skipping tag/push."
-          printf '{"imageTag":""}' > image.json
-        fi
+      - echo "== Tag & Push to ECR =="
+      - docker tag ${REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+      - docker push ${ECR_URI}:${IMAGE_TAG}
+
+      - printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
+
       - echo "== Upload build.log / image.json to S3 =="
       - |
         BUILD_ID_SAFE=$(echo "$CODEBUILD_BUILD_ID" | tr "/" "_" )
-        PREFIX="${ARTIFACT_PREFIX:-bemac-fe}/${BUILD_ID_SAFE}"
+        PREFIX="${ARTIFACT_PREFIX}/${BUILD_ID_SAFE}"
         echo "Uploading to s3://${ARTIFACT_BUCKET}/${PREFIX}/"
         aws s3 cp build.log "s3://${ARTIFACT_BUCKET}/${PREFIX}/build.log" || true
         aws s3 cp image.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/image.json" || true
