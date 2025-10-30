@@ -43,18 +43,44 @@ pip install -r requirements.txt
 cp env.example .env
 ```
 
-必要な環境変数を設定：
+必要な環境変数（`app/settings.py` に準拠）：
 
 ```env
-# Azure OpenAI設定（会議要約機能用）
-AZURE_OPENAI_ENDPOINT=https://your-resource.cognitiveservices.azure.com
-AZURE_OPENAI_API_KEY=your-api-key-here
-AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
+# アプリ基本設定
+APP_NAME=Facilitation AI PoC
+DEBUG=false
+DEFAULT_TIMEZONE=Asia/Tokyo
 
-# その他の設定
+# データ保存先
 DATA_DIR=./data
-CORS_ORIGINS=http://localhost:3000
+SUMMARIES_DIR=./data/summaries
+
+# CORS設定（カンマ区切り）
+CORS_ORIGINS=http://localhost:3000,https://<your-frontend-domain>
+
+# ASR（音声認識）設定
+# 選択肢: stub | whisper_python | azure_whisper（推奨）
+ASR_PROVIDER=azure_whisper
+ASR_LANGUAGE=ja
+ASR_TEMPERATURE=0.0
+
+# Azure OpenAI Whisper（ASR用）
+AZURE_WHISPER_ENDPOINT=
+AZURE_WHISPER_API_KEY=
+AZURE_WHISPER_DEPLOYMENT=whisper
+AZURE_WHISPER_API_VERSION=2024-06-01
+
+# Azure OpenAI（要約・脱線検知用）
+AZURE_OPENAI_ENDPOINT=
+AZURE_OPENAI_API_KEY=
+AZURE_OPENAI_API_VERSION_RESPONSES=2025-04-01
+AZURE_OPENAI_API_VERSION_CHAT=2024-12-01-preview
+AZURE_OPENAI_DEPLOYMENT=gpt-5-mini
 ```
+
+補足:
+- 環境変数名は大文字スネークケースで指定できます（`BaseSettings(case_sensitive=False)`）。
+- ECSデプロイでは一部の変数はタスク定義から上書き注入されます（後述）。
 
 ## 💻 使用方法
 
@@ -284,31 +310,59 @@ echo $OPENAI_API_KEY      # Linux/Mac
 - 脱線検知機能
 - Slack連携
 
-## 🚀 本番環境デプロイ
+## 🚀 本番環境デプロイ（ECS）
 
-### AWS EC2へのデプロイ
+本番は ECS(Fargate) で稼働します。バックエンド用スタックは `infra/24_be_ecs.yml` です。
 
-本番環境（AWS EC2）へのデプロイ方法：
+### 事前準備
 
-**詳細ドキュメント**:
-- **[DEPLOY_AUTOMATION_SSM.md](./DEPLOY_AUTOMATION_SSM.md)** - SSM経由の自動デプロイ（推奨）
-- **[DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md)** - EC2環境のセットアップ
-- **[GITHUB_SECRETS_SSM.md](./GITHUB_SECRETS_SSM.md)** - GitHub Secretsの設定
+- VPC/サブネット/ALB/TargetGroup/ECR は別スタックで用意済み（ImportValue を参照）。
+- Secrets Manager にアプリ用シークレットを作成（命名: `${CustomerName}-${ProjectName}-${Environment}-app-secrets`）。
+  - 必須: `AZURE_OPENAI_API_KEY`
+  - 任意: `DATABASE_URL`（DB未使用なら空で可）、`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`（必要時）
 
-### クイックスタート
+### パラメータ
 
-1. **EC2セットアップ** → [DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md) を参照
-2. **IAMロール設定** → [DEPLOY_AUTOMATION_SSM.md](./DEPLOY_AUTOMATION_SSM.md) を参照
-3. **GitHub Secrets設定** → [GITHUB_SECRETS_SSM.md](./GITHUB_SECRETS_SSM.md) を参照
-4. **デプロイ実行**:
-   ```bash
-   git push origin main  # 自動デプロイ
-   ```
+- `CustomerName`/`ProjectName`/`Environment`/`SystemName`: 命名規則に使用
+- `DomainName`: フロントエンド公開ドメイン（CORSに反映）
+- `ContainerCpu`/`ContainerMemory`: Fargate リソース設定（既定: 1024/2048）
+- `DesiredCount`: タスク数（0=停止, 本番は >=1）
+- `Port`: 8000 固定（`uvicorn` で起動）
 
-### デプロイ方法
+### デプロイ手順（CloudFormation）
 
-- **自動デプロイ**: mainブランチへのpushで自動実行（GitHub Actions + AWS SSM）
-- **手動デプロイ**: GitHub Actionsから「Run workflow」で実行
+1. コンテナイメージを ECR に `latest` としてプッシュ（別リポジトリ／パイプラインを利用）
+2. `infra/24_be_ecs.yml` をスタック作成/更新
+   - `DomainName` をフロントエンドの FQDN に設定
+   - 必要なら `DesiredCount` を 1 以上に設定
+3. デプロイ後、ALB→TargetGroup→サービス経由で疎通確認
+
+### タスク内の環境変数
+
+スタックは次を注入します（必要に応じて変更可）。アプリが参照する主な変数は README の「環境変数」節に準拠します。
+
+- Secrets（機密）
+  - `AZURE_OPENAI_API_KEY`（必須）
+  - `DATABASE_URL`（任意）
+  - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`（任意）
+- Environment（非機密の例）
+  - `CORS_ORIGINS`（`https://${DomainName}` に設定）
+  - `AWS_REGION`、`DEBUG=false` など
+
+### 起動コマンド
+
+タスク定義にて `uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4` を実行します。
+
+---
+
+## 🗂 レガシー（EC2）デプロイ
+
+EC2向けの手順は引き続き参照可能ですが、現行はECSを推奨します。
+
+**関連ドキュメント**:
+- **[DEPLOY_AUTOMATION_SSM.md](./DEPLOY_AUTOMATION_SSM.md)** - SSM経由の自動デプロイ
+- **[DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md)** - EC2環境セットアップ
+- **[GITHUB_SECRETS_SSM.md](./GITHUB_SECRETS_SSM.md)** - GitHub Secrets設定
 
 ---
 
