@@ -1,0 +1,90 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_REGION: ap-northeast-1
+    REPO: bemac-fe
+    NEXT_PUBLIC_API_URL: /backend-api
+    BACKEND_API_URL: http://54.250.241.155:8000
+    ARTIFACT_BUCKET: "codebuild-artifacts-111938288341-ap-northeast-1"
+    ARTIFACT_PREFIX: "bemac-fe"
+  exported-variables:
+    - IMAGE_TAG
+
+phases:
+  install:
+    commands:
+      - echo "== Install phase =="
+      - docker version
+      - aws --version
+      - echo "whoami=$(whoami)  hostname=$(hostname)"
+
+  pre_build:
+    commands:
+      - echo "== Login to ECR =="
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO}
+      - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
+      - IMAGE_TAG=prod-$(date +%Y%m%d-%H%M)
+      - echo "IMAGE_TAG=${IMAGE_TAG}"
+      - echo "ECR_URI=${ECR_URI}"
+      - echo "BACKEND_API_URL=${BACKEND_API_URL}"
+      - echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}"
+      # --- diagnostics (optional) ---
+      - echo "== Connectivity check to ECR Public =="
+      - timeout 10 bash -lc 'getent hosts public.ecr.aws || true'
+      - timeout 15 bash -lc 'curl -I https://public.ecr.aws/v2/ || true'
+      - echo "== Try pulling base image from ECR Public (diagnostic only) =="
+      - timeout 120 docker pull public.ecr.aws/docker/library/node:20-bullseye-slim || echo "[WARN] pull failed (see above)"
+
+  build:
+    commands:
+      - printf '' > build.log
+      - |
+        bash -lc '
+          set -euo pipefail; set -x
+          echo "== Show tree (top 2 levels) ==" | tee -a build.log
+          ls -la | tee -a build.log
+          echo "---" | tee -a build.log
+          find . -maxdepth 2 -type d -print | tee -a build.log
+
+          echo "== Dockerfile header (should show public.ecr.aws) ==" | tee -a build.log
+          sed -n "1,24p" Dockerfile.fe | tee -a build.log
+
+          echo "== Docker build (Dockerfile at repo root, context=repo root) ==" | tee -a build.log
+          export DOCKER_BUILDKIT=1
+          docker build \
+            -f Dockerfile.fe \
+            -t ${REPO}:${IMAGE_TAG} \
+            --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
+            --build-arg BACKEND_API_URL="${BACKEND_API_URL}" \
+            --progress=plain \
+            . 2>&1 | tee -a build.log
+        '
+      - tail -n 300 build.log || true
+
+  post_build:
+    commands:
+      - echo "== Tag & Push (only if image exists) =="
+      - |
+        if docker image inspect ${REPO}:${IMAGE_TAG} > /dev/null 2>&1; then
+          docker tag ${REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+          docker push ${ECR_URI}:${IMAGE_TAG}
+          printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
+        else
+          echo "Image not found. Skipping tag/push."
+          printf '{"imageTag":""}' > image.json
+        fi
+      - echo "== Upload build.log / image.json to S3 =="
+      - |
+        BUILD_ID_SAFE=$(echo "$CODEBUILD_BUILD_ID" | tr "/" "_" )
+        PREFIX="${ARTIFACT_PREFIX:-bemac-fe}/${BUILD_ID_SAFE}"
+        echo "Uploading to s3://${ARTIFACT_BUCKET}/${PREFIX}/"
+        aws s3 cp build.log "s3://${ARTIFACT_BUCKET}/${PREFIX}/build.log" || true
+        aws s3 cp image.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/image.json" || true
+
+artifacts:
+  files:
+    - image.json
+    - build.log
+  discard-paths: yes
