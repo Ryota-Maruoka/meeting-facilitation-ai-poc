@@ -57,6 +57,8 @@ phases:
           docker tag ${REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
           docker push ${ECR_URI}:${IMAGE_TAG}
           printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
+          # ECS CodePipeline 用のイメージ定義ファイルを生成
+          printf '[{"name":"bemac-be","imageUri":"%s"}]' "${ECR_URI}:${IMAGE_TAG}" > imagedefinitions.json
         else
           echo "Image not found. Skipping tag/push."
           printf '{"imageTag":""}' > image.json
@@ -68,9 +70,11 @@ phases:
         echo "Uploading to s3://${ARTIFACT_BUCKET}/${PREFIX}/"
         aws s3 cp build.log "s3://${ARTIFACT_BUCKET}/${PREFIX}/build.log" || true
         aws s3 cp image.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/image.json" || true
+        aws s3 cp imagedefinitions.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/imagedefinitions.json" || true
 
 artifacts:
   files:
     - image.json
     - build.log
+    - imagedefinitions.json
   discard-paths: yes
