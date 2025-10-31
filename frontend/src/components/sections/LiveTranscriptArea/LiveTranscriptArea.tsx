@@ -19,6 +19,7 @@ import {
   Stop as StopIcon,
 } from "@mui/icons-material";
 import { apiClient } from "@/lib/api";
+import { formatElapsedHMSFromMs } from "@/lib/time";
 import type { Transcript } from "@/lib/types";
 
 type LiveTranscriptAreaProps = {
@@ -115,10 +116,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
       
       if (result.text) {
         const now = Date.now();
-        const elapsed = Math.floor((now - startTimeRef.current) / 1000);
-        const minutes = Math.floor(elapsed / 60);
-        const seconds = elapsed % 60;
-        const timestamp = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+        const timestamp = formatElapsedHMSFromMs(now - startTimeRef.current);
         
         // WhisperのJSONからタイムスタンプ情報を除去し、テキストのみを抽出
         // 包括的なタイムスタンプ除去パターンに対応

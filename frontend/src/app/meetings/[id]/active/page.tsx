@@ -41,6 +41,7 @@ import LiveTranscriptArea, { LiveTranscriptAreaHandle } from "@/components/secti
 import DeviationAlert from "@/components/sections/DeviationAlert";
 import { useDeviationDetection } from "@/hooks/useDeviationDetection";
 import { apiClient } from "@/lib/api";
+import { formatElapsedHMSFromIso } from "@/lib/time";
 import type { Meeting } from "@/lib/types";
 
 export default function MeetingActivePage() {
@@ -610,15 +611,8 @@ export default function MeetingActivePage() {
                 {alerts.length > 0 ? (
                   <div className="alerts-list">
                     {alerts.map((alert) => {
-                      // 録音開始からの経過時間を計算（MM:SS形式）
-                      const alertTime = new Date(alert.timestamp);
-                      const meetingStart = meetingStartTime || new Date();
-                      const elapsedMs = alertTime.getTime() - meetingStart.getTime();
-                      const elapsedSeconds = Math.floor(elapsedMs / 1000);
-                      const minutes = Math.floor(elapsedSeconds / 60);
-                      const seconds = elapsedSeconds % 60;
-                      const timestamp = `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
-                      
+                      const meetingStartIso = meetingStartTime ? meetingStartTime.toISOString() : undefined;
+                      const timestamp = formatElapsedHMSFromIso(meetingStartIso, alert.timestamp);
                       return (
                         <div key={alert.id} className="alert-item">
                           <DeviationAlert
