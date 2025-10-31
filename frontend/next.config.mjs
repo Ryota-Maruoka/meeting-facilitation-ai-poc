@@ -16,7 +16,7 @@ const nextConfig = {
 
   async rewrites() {
     // 環境変数またはデフォルト値を使用
-    const backendUrl = process.env.BACKEND_API_URL || 'http://54.250.241.155:8000';
+    const backendUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL || '';
 
     return [
       {

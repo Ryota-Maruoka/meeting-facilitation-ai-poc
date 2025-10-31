@@ -1,0 +1,95 @@
+version: 0.2
+
+env:
+  variables:
+    # -----------------------------------------------------
+    # 基本設定
+    # -----------------------------------------------------
+    AWS_REGION: ap-northeast-1
+    REPO: bemac-fe
+
+    # -----------------------------------------------------
+    # Next.js ビルド時の環境変数
+    # -----------------------------------------------------
+    # - BACKEND_API_URL: Next.js のリライト先URL（ALBまたはFastAPIエンドポイント）
+    # - NEXT_PUBLIC_API_URL: クライアント直叩き用の相対パス（デフォルト /backend-api）
+    BACKEND_API_URL: "https://bemac-meeting-fe-alb-1103801797.ap-northeast-1.elb.amazonaws.com"
+    NEXT_PUBLIC_API_URL: "/backend-api"
+
+    # -----------------------------------------------------
+    # S3 出力関連（任意）
+    # -----------------------------------------------------
+    ARTIFACT_BUCKET: "codebuild-artifacts-111938288341-ap-northeast-1"
+    ARTIFACT_PREFIX: "bemac-fe"
+
+  exported-variables:
+    - IMAGE_TAG
+
+phases:
+  install:
+    commands:
+      - echo "== Install phase =="
+      - docker version
+      - aws --version
+      - echo "whoami=$(whoami) hostname=$(hostname)"
+
+  pre_build:
+    commands:
+      - echo "== Login to ECR =="
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO}
+      - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
+      - IMAGE_TAG=prod-$(date +%Y%m%d-%H%M)
+      - echo "IMAGE_TAG=${IMAGE_TAG}"
+      - echo "ECR_URI=${ECR_URI}"
+      - echo "BACKEND_API_URL=${BACKEND_API_URL}"
+      - echo "NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}"
+
+  build:
+    commands:
+      - printf '' > build.log
+      - |
+        bash -lc '
+          set -euo pipefail; set -x
+          echo "== Show tree (top 2 levels) ==" | tee -a build.log
+          find . -maxdepth 2 -type d -print | tee -a build.log
+
+          echo "== Dockerfile header (.github/docker/web/Dockerfile) ==" | tee -a build.log
+          sed -n "1,40p" .github/docker/web/Dockerfile | tee -a build.log
+
+          echo "== Docker build (context = repo root) ==" | tee -a build.log
+          export DOCKER_BUILDKIT=1
+          docker build \
+            -f .github/docker/web/Dockerfile \
+            -t ${REPO}:${IMAGE_TAG} \
+            --build-arg BACKEND_API_URL="${BACKEND_API_URL}" \
+            --build-arg NEXT_PUBLIC_API_URL="${NEXT_PUBLIC_API_URL}" \
+            --progress=plain \
+            . 2>&1 | tee -a build.log
+        '
+      - tail -n 300 build.log || true
+
+  post_build:
+    commands:
+      - echo "== Tag & Push to ECR =="
+      - docker tag ${REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+      - docker push ${ECR_URI}:${IMAGE_TAG}
+
+      - printf '{"imageTag":"%s"}' "$IMAGE_TAG" > image.json
+      # ECS CodePipeline 用のイメージ定義ファイルを生成
+      - printf '[{"name":"frontend","imageUri":"%s"}]' "${ECR_URI}:${IMAGE_TAG}" > imagedefinitions.json
+      - echo "== Upload build.log / image.json to S3 =="
+      - |
+        BUILD_ID_SAFE=$(echo "$CODEBUILD_BUILD_ID" | tr "/" "_" )
+        PREFIX="${ARTIFACT_PREFIX}/${BUILD_ID_SAFE}"
+        echo "Uploading to s3://${ARTIFACT_BUCKET}/${PREFIX}/"
+        aws s3 cp build.log "s3://${ARTIFACT_BUCKET}/${PREFIX}/build.log" || true
+        aws s3 cp image.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/image.json" || true
+        aws s3 cp imagedefinitions.json "s3://${ARTIFACT_BUCKET}/${PREFIX}/imagedefinitions.json" || true
+
+artifacts:
+  files:
+    - image.json
+    - build.log
+    - imagedefinitions.json
+  discard-paths: yes
