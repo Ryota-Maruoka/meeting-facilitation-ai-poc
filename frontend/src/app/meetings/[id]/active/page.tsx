@@ -33,6 +33,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
@@ -74,6 +75,7 @@ export default function MeetingActivePage() {
   }>>([]);
 
   const [summary, setSummary] = useState<string>("");
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
 
   const [parkingLot, setParkingLot] = useState<string[]>([]);
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
@@ -156,6 +158,8 @@ export default function MeetingActivePage() {
         }
 
         console.log("要約を生成中...");
+        setIsGeneratingSummary(true);
+
         // 要約を生成
         await apiClient.generateSummary(meetingId);
 
@@ -168,7 +172,7 @@ export default function MeetingActivePage() {
         }
       } catch (error) {
         console.error("要約の取得に失敗しました:", error);
-        
+
         // エラーメッセージをユーザーに表示
         if (error instanceof Error) {
           if (error.message.includes("文字起こしデータが見つかりません")) {
@@ -179,6 +183,8 @@ export default function MeetingActivePage() {
             console.log("要約生成中にエラーが発生しました:", error.message);
           }
         }
+      } finally {
+        setIsGeneratingSummary(false);
       }
     };
 
@@ -314,6 +320,11 @@ export default function MeetingActivePage() {
   };
 
   const handleEndMeetingConfirm = async () => {
+    console.log("会議終了:", meetingId);
+
+    // タイマーを停止（経過時間の表示を固定）
+    setIsMeetingStarted(false);
+
     // 会議終了時に会議レポート用のデータを保存
     if (meetingData && meetingStartTime) {
       // 経過時間を計算（分単位）
@@ -327,17 +338,9 @@ export default function MeetingActivePage() {
         startTime: formatStartTime(meetingStartTime),
       };
 
-        sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
-
-      // APIで会議終了を呼び出し（非同期で実行し、完了を待たない）
-      apiClient.endMeeting(meetingId).then(() => {
-        console.log("Meeting ended successfully");
-      }).catch((error) => {
-        console.error("Failed to end meeting:", error);
-      });
+      sessionStorage.setItem("meetingSummary", JSON.stringify(meetingSummaryData));
     }
 
-    console.log("会議終了:", meetingId);
     // ローディング表示開始
     setIsEndingMeeting(true);
     setEndModalOpen(false);
@@ -348,9 +351,11 @@ export default function MeetingActivePage() {
         await transcriptRef.current.stopAndFlush();
       }
 
-      // 2) 会議終了 → 要約生成を順に実行
+      // 2) 会議終了API呼び出し（バックグラウンドで要約生成が開始される）
       await apiClient.endMeeting(meetingId);
-      await apiClient.generateSummary(meetingId);
+
+      // 3) すぐにサマリー画面へ遷移（要約生成を待たない）
+      // サマリー画面側で要約の読み込み状態を表示する
     } catch (error) {
       console.error("会議終了処理に失敗:", error);
     } finally {
@@ -573,8 +578,41 @@ export default function MeetingActivePage() {
                 <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
                   文字起こしが開始されると要約が自動生成されます
                 </div>
+              ) : isGeneratingSummary ? (
+                <div className="loading-box">
+                  <div className="spinner"></div>
+                  <span>生成中...</span>
+                </div>
               ) : (
-                <div className="summary-text">{summary || "要約データがありません"}</div>
+                <div style={{ lineHeight: 1.8 }}>
+                  <ReactMarkdown
+                    components={{
+                      h2: ({ node, ...props }) => (
+                        <>
+                          <hr style={{ border: 'none', borderTop: '2px solid #e0e0e0', margin: '20px 0 16px 0' }} />
+                          <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: '#1f2937' }} {...props} />
+                        </>
+                      ),
+                      h3: ({ node, ...props }) => (
+                        <>
+                          <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', margin: '16px 0 12px 0' }} />
+                          <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#374151' }} {...props} />
+                        </>
+                      ),
+                      p: ({ node, ...props }) => (
+                        <p style={{ marginBottom: '12px' }} {...props} />
+                      ),
+                      ul: ({ node, ...props }) => (
+                        <ul style={{ marginLeft: '20px', marginBottom: '12px' }} {...props} />
+                      ),
+                      li: ({ node, ...props }) => (
+                        <li style={{ marginBottom: '6px' }} {...props} />
+                      ),
+                    }}
+                  >
+                    {summary || "要約データがありません"}
+                  </ReactMarkdown>
+                </div>
               )}
             </div>
           </div>

@@ -33,6 +33,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, SUMMARY_PAGE_TITLE, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
@@ -50,6 +51,7 @@ export default function MeetingSummaryPage() {
   // -----------------------------
   const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(true);
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState<boolean>(true);
+  const [meetingStartedAt, setMeetingStartedAt] = useState<string | undefined>(undefined);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
@@ -97,6 +99,11 @@ export default function MeetingSummaryPage() {
 
         // APIから会議データを取得
         const meeting = await apiClient.getMeeting(meetingId);
+
+        // 会議開始時刻を状態に保存（タイムスタンプ変換用）
+        if (meeting.started_at) {
+          setMeetingStartedAt(meeting.started_at);
+        }
 
         // APIから要約データを取得
         setIsLoadingSummary(true);
@@ -171,6 +178,103 @@ export default function MeetingSummaryPage() {
     fetchSummaryData();
   }, [meetingId]);
 
+  // 要約が空の場合、バックグラウンド生成をポーリング
+  useEffect(() => {
+    // 要約が既に存在する、またはローディング中の場合はポーリング不要
+    if (isLoadingSummary) return;
+    if (summaryData.overallSummary && summaryData.overallSummary !== "要約データがありません") return;
+
+    let pollCount = 0;
+    const maxPolls = 30; // 最大30回（2.5分間）
+
+    const pollSummary = async () => {
+      try {
+        pollCount++;
+        console.log(`要約をポーリング中... (${pollCount}/${maxPolls})`);
+
+        const summary = await apiClient.getSummary(meetingId);
+
+        // 有効な要約が取得できた場合
+        if (summary?.summary && summary.summary !== "") {
+          console.log("要約が生成されました");
+          setSummaryData(prev => ({
+            ...prev,
+            overallSummary: summary.summary,
+            decisions: summary.decisions || [],
+            unresolved: summary.undecided || [],
+            actions: (summary.actions || []).map((action: any) => ({
+              task: action.title || "",
+              assignee: action.owner || "",
+              dueDate: action.due || "",
+            })),
+          }));
+
+          // ポーリング停止
+          if (pollInterval) {
+            clearInterval(pollInterval);
+          }
+        } else if (pollCount >= maxPolls) {
+          console.log("要約生成のポーリングを終了します（最大試行回数に達しました）");
+          if (pollInterval) {
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (error) {
+        console.error("要約のポーリングに失敗しました:", error);
+      }
+    };
+
+    // 5秒ごとにポーリング
+    const pollInterval = setInterval(pollSummary, 5000);
+
+    // 初回は即座に実行
+    pollSummary();
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [meetingId, isLoadingSummary, summaryData.overallSummary]);
+
+  // -----------------------------
+  // ヘルパー関数
+  // -----------------------------
+
+  /**
+   * ISO 8601タイムスタンプを会議開始時刻からの経過時間（HH:MM:SS）に変換
+   * @param isoTimestamp - ISO 8601形式のタイムスタンプ
+   * @param meetingStartTime - 会議開始時刻（ISO 8601形式）
+   * @returns HH:MM:SS形式の経過時間
+   */
+  const formatRelativeTime = (isoTimestamp: string, meetingStartTime: string | undefined): string => {
+    if (!meetingStartTime) {
+      // 会議開始時刻が不明な場合は元のタイムスタンプを返す
+      return isoTimestamp;
+    }
+
+    try {
+      const timestamp = new Date(isoTimestamp);
+      const startTime = new Date(meetingStartTime);
+      const elapsedMs = timestamp.getTime() - startTime.getTime();
+      const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+      // 負の値の場合は00:00:00を返す
+      if (elapsedSeconds < 0) {
+        return "00:00:00";
+      }
+
+      const hours = Math.floor(elapsedSeconds / 3600);
+      const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+      const seconds = elapsedSeconds % 60;
+
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    } catch (error) {
+      console.error("タイムスタンプの変換に失敗しました:", error);
+      return isoTimestamp;
+    }
+  };
+
   // -----------------------------
   // イベントハンドラ
   // -----------------------------
@@ -194,7 +298,7 @@ export default function MeetingSummaryPage() {
 
   return (
     <div className="page">
-      <style>{commonStyles}</style>
+      <style suppressHydrationWarning>{commonStyles}</style>
 
       <div className="page-container">
         {/* ヘッダー */}
@@ -255,13 +359,13 @@ export default function MeetingSummaryPage() {
                 summaryData.transcripts.map((transcript, index) => (
                   <div key={index} style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px solid #e6e8ee" }}>
                     <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>
-                      {transcript.timestamp}
+                      {formatRelativeTime(transcript.timestamp, meetingStartedAt)}
                     </div>
-                    <div>{transcript.text}</div>
+                    <div style={{ fontSize: "14px", color: "#374151", lineHeight: "1.6" }}>{transcript.text}</div>
                   </div>
                 ))
               ) : (
-                <div style={{ textAlign: "center", color: "#6b7280", padding: "20px" }}>
+                <div style={{ textAlign: "center", color: "#6b7280", fontSize: "14px", padding: "20px" }}>
                   文字起こし内容がありません
                 </div>
               )}
@@ -275,13 +379,41 @@ export default function MeetingSummaryPage() {
               <span>要約</span>
             </div>
             <div className="column-content">
-              {isLoadingSummary ? (
+              {isLoadingSummary || summaryData.overallSummary === "要約データがありません" ? (
                 <div className="loading-box">
                   <div className="spinner"></div>
-                  <span>読み込み中...</span>
+                  <span>生成中...</span>
                 </div>
               ) : (
-                <p style={{ lineHeight: 1.8 }}>{summaryData.overallSummary}</p>
+                <div style={{ lineHeight: 1.6, fontSize: "14px", color: "#374151" }}>
+                  <ReactMarkdown
+                    components={{
+                      h2: ({ node, ...props }) => (
+                        <>
+                          <hr style={{ border: 'none', borderTop: '2px solid #e0e0e0', margin: '20px 0 16px 0' }} />
+                          <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '12px', color: '#1f2937' }} {...props} />
+                        </>
+                      ),
+                      h3: ({ node, ...props }) => (
+                        <>
+                          <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', margin: '16px 0 12px 0' }} />
+                          <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px', color: '#374151' }} {...props} />
+                        </>
+                      ),
+                      p: ({ node, ...props }) => (
+                        <p style={{ marginBottom: '12px', fontSize: '14px', color: '#374151', lineHeight: '1.6' }} {...props} />
+                      ),
+                      ul: ({ node, ...props }) => (
+                        <ul style={{ marginLeft: '20px', marginBottom: '12px', fontSize: '14px', color: '#374151' }} {...props} />
+                      ),
+                      li: ({ node, ...props }) => (
+                        <li style={{ marginBottom: '6px', lineHeight: '1.6' }} {...props} />
+                      ),
+                    }}
+                  >
+                    {summaryData.overallSummary}
+                  </ReactMarkdown>
+                </div>
               )}
             </div>
           </div>
@@ -293,10 +425,10 @@ export default function MeetingSummaryPage() {
               <span>決定事項・未決事項・アクション・保留事項</span>
             </div>
             <div className="column-content">
-              {isLoadingSummary ? (
+              {isLoadingSummary || summaryData.overallSummary === "要約データがありません" ? (
                 <div className="loading-box">
                   <div className="spinner"></div>
-                  <span>読み込み中...</span>
+                  <span>生成中...</span>
                 </div>
               ) : (
                 <>
@@ -308,7 +440,7 @@ export default function MeetingSummaryPage() {
                     {summaryData.decisions.length > 0 ? (
                       summaryData.decisions.map((decision, index) => (
                         <div key={index} className="decision-item" style={{ marginBottom: "8px", paddingLeft: "12px", borderLeft: "3px solid #10b981" }}>
-                          <div className="item-title">{decision}</div>
+                          <div className="item-title" style={{ fontSize: "14px", color: "#374151", lineHeight: "1.6" }}>{decision}</div>
                         </div>
                       ))
                     ) : (
@@ -324,7 +456,7 @@ export default function MeetingSummaryPage() {
                     {summaryData.unresolved.length > 0 ? (
                       summaryData.unresolved.map((item, index) => (
                         <div key={index} className="unresolved-item" style={{ marginBottom: "8px", paddingLeft: "12px", borderLeft: "3px solid #f59e0b" }}>
-                          <div className="item-title">{item}</div>
+                          <div className="item-title" style={{ fontSize: "14px", color: "#374151", lineHeight: "1.6" }}>{item}</div>
                         </div>
                       ))
                     ) : (
@@ -340,7 +472,7 @@ export default function MeetingSummaryPage() {
                     {summaryData.actions.length > 0 ? (
                       summaryData.actions.map((action, index) => (
                         <div key={index} className="action-item" style={{ marginBottom: "12px", paddingLeft: "12px", borderLeft: "3px solid #3b82f6" }}>
-                          <div className="item-title" style={{ marginBottom: "4px" }}>{action.task}</div>
+                          <div className="item-title" style={{ marginBottom: "4px", fontSize: "14px", color: "#374151", lineHeight: "1.6" }}>{action.task}</div>
                           <div className="item-meta" style={{ fontSize: "12px", color: "#6b7280" }}>
                             担当: {action.assignee || "未定"} / 期限: {action.dueDate || "未定"}
                           </div>
@@ -359,7 +491,7 @@ export default function MeetingSummaryPage() {
                     {summaryData.parkingLot.length > 0 ? (
                       summaryData.parkingLot.map((item, index) => (
                         <div key={index} className="parking-item" style={{ marginBottom: "8px", paddingLeft: "12px", borderLeft: "3px solid #f97316" }}>
-                          <div className="item-title">{item}</div>
+                          <div className="item-title" style={{ fontSize: "14px", color: "#374151", lineHeight: "1.6" }}>{item}</div>
                         </div>
                       ))
                     ) : (

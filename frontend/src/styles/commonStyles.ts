@@ -1490,7 +1490,7 @@ export const commonStyles = `
     padding: 20px;
     display: flex;
     flex-direction: column;
-    height: 550px;
+    height: 650px;
   }
 
   .column-content {
