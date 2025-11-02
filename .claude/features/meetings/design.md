@@ -184,7 +184,7 @@ related:
     - Azure OpenAI Responses API使用
     ↓
 バックエンド: 要約結果をsummary.jsonに保存
-    - summary: 会議全体の要約
+    - summary: 会議全体の要約（Markdown形式で構造化：見出し、箇条書き、段落分けを含む）
     - decisions: 決定事項一覧
     - undecided: 未決事項一覧
     - actions: アクション項目一覧（担当者・期限付き）
@@ -250,7 +250,7 @@ data/meetings/{meeting_id}/
 ```json
 {
   "generated_at": "2025-02-11T11:00:00Z",
-  "summary": "会議全体の要約",
+  "summary": "## 会議概要\n\n本日の週次レビューでは以下の内容を議論しました。\n\n### 主要な議題\n\n- プロジェクトの進捗確認\n- 次週のスケジュール調整\n- リスクの洗い出し\n\n### 結論\n\n開発スケジュールを1週間前倒しすることで合意しました。",
   "decisions": ["決定事項1", "決定事項2"],
   "undecided": ["未決事項1"],
   "actions": [
@@ -262,6 +262,8 @@ data/meetings/{meeting_id}/
   ]
 }
 ```
+
+**注**: `summary`フィールドはMarkdown形式で出力されます（見出し `##`, `###`、箇条書き `-`、段落分け `\n\n`）。フロントエンド側でMarkdownレンダリングすることで見やすく表示されます。
 
 ### 3.2 型マッピング（Backend ↔ Frontend）
 
