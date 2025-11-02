@@ -98,7 +98,6 @@ export default function MeetingActivePage() {
     handleAddToParkingLot,
     handleIgnoreDeviation,
     clearAllAlerts,
-    addTestAlert,
   } = useDeviationDetection({
     meetingId,
     transcripts,
@@ -639,16 +638,6 @@ export default function MeetingActivePage() {
                     (検知中...)
                   </span>
                 )}
-                {/* 🧪 テスト用アラート追加ボタン（開発時のみ） */}
-                {process.env.NODE_ENV === "development" && (
-                  <button 
-                    className="btn btn-sm" 
-                    style={{ marginLeft: "auto" }}
-                    onClick={() => addTestAlert()}
-                  >
-                    テストアラート追加
-                  </button>
-                )}
               </div>
               <div className="section-content alerts-container" style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 16px 16px 16px" }}>
                 {alerts.length > 0 ? (
@@ -744,16 +733,6 @@ export default function MeetingActivePage() {
           <button className="btn" onClick={handleBackToListClick}>
             一覧に戻る
           </button>
-          {isMeetingStarted && (
-            <button 
-              className="btn btn-warning" 
-              onClick={checkDeviation}
-              disabled={isCheckingDeviation || transcripts.length < 3}
-              style={{ marginRight: "8px" }}
-            >
-              {isCheckingDeviation ? "検知中..." : "脱線検知実行"}
-            </button>
-          )}
           <button className="btn btn-danger btn-large" onClick={handleEndMeetingClick}>
             会議終了
           </button>

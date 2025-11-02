@@ -25,7 +25,6 @@ type UseDeviationDetectionReturn = {
   handleAddToParkingLot: (alertId: string, title: string) => void;
   handleIgnoreDeviation: (alertId: string) => void;
   clearAllAlerts: () => void;
-  addTestAlert: (override?: Partial<DeviationAlert>) => void; // 🧪 テスト用アラート追加
 };
 
 /**
@@ -199,27 +198,6 @@ export const useDeviationDetection = ({
     setConsecutiveDeviations(0);
   }, []);
 
-  // 🧪 テスト用: ダミーの脱線アラートを手動で追加
-  const addTestAlert = useCallback((override?: Partial<DeviationAlert>) => {
-    const now = new Date().toISOString();
-    const base: DeviationAlert = {
-      id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      is_deviation: true,
-      confidence: 0.87,
-      similarity: 0.22,
-      best_agenda: "JWT方式の検討",
-      message: "直近の会話がアジェンダから逸脱している可能性があります",
-      suggestedTopics: ["認証方式の比較に戻る", "セキュリティ要件の確認"],
-      recent_text: "レポートといえば、出力フォーマットをPDFだけじゃなくてPowerPointでも出せたら便利です。……あ、でも欲張りすぎですかね？PowerPoint出力は可能ですよ。実は前職で似た仕組みを作ったことがあって。ただ、そのときは“フォントがずれる問題”で、地味に炎上しました（笑）それは避けたいですね。開発チームのトラウマ案件になりそう。フォントずれって、なんであんなに起こるんでしょうね？私の家のプリンタでも、Wordの文字がズレて…。たまに“印刷の神様”に祈ってます（笑）それはもう、ドライバのせいですね（笑）。うちのチームにも“ドライバ信仰”の人が一人います。……はい、ちょっと話が脱線しましたね（笑）。",
-      created_at: now,
-      timestamp: now,
-    };
-    const alert = { ...base, ...override, id: base.id };
-    setAlerts(prev => [...prev, alert]);
-    console.log("🧪 テストアラートを追加:", alert.id);
-    console.log("💬 recent_text:", alert.recent_text);
-  }, []);
-
   return {
     alerts,
     isCheckingDeviation,
@@ -230,6 +208,5 @@ export const useDeviationDetection = ({
     handleAddToParkingLot,
     handleIgnoreDeviation,
     clearAllAlerts,
-    addTestAlert,
   };
 };
