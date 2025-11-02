@@ -472,19 +472,19 @@ export default function MeetingActivePage() {
   }
 
   return (
-    <div className="page">
+    <div className="page" style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <style suppressHydrationWarning>{commonStyles}</style>
 
-      <div className="page-container">
+      <div className="page-container" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
         {/* ヘッダー */}
-        <div className="meeting-header">
+        <div className="meeting-header" style={{ flexShrink: 0 }}>
           <div className="meeting-title">会議中画面</div>
         </div>
 
         {/* ボディコンテンツ */}
-        <div className="body-content">
+        <div className="body-content" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
           {/* 会議情報セクション */}
-          <div className="meeting-info-section">
+          <div className="meeting-info-section" style={{ paddingLeft: "24px", paddingRight: "24px", flexShrink: 0 }}>
           <div className="meeting-info" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
             <div className="meeting-info-item">
               <strong>会議名:</strong>
@@ -519,7 +519,7 @@ export default function MeetingActivePage() {
         </div>
 
         {/* アジェンダ進捗バー */}
-        <div className="agenda-progress-section">
+        <div className="agenda-progress-section" style={{ paddingLeft: "24px", paddingRight: "24px", flexShrink: 0 }}>
           <div className="agenda-progress-title">
             <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
             <span>アジェンダ進捗バー</span>
@@ -550,9 +550,9 @@ export default function MeetingActivePage() {
         </div>
 
         {/* 3カラムレイアウト */}
-        <div className="three-column-layout">
+        <div className="three-column-layout" style={{ flex: 1, overflow: "hidden", minHeight: 0, padding: "8px 0" }}>
           {/* 文字起こし（LiveTranscriptArea統合） */}
-          <div className="column-section">
+          <div className="column-section" style={{ height: "100%" }}>
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.TRANSCRIBE}</span>
               <span>文字起こし</span>
@@ -568,7 +568,7 @@ export default function MeetingActivePage() {
           </div>
 
           {/* 要約 */}
-          <div className="column-section">
+          <div className="column-section" style={{ height: "100%" }}>
             <div className="section-header">
               <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
               <span>要約</span>
@@ -618,7 +618,7 @@ export default function MeetingActivePage() {
           </div>
 
           {/* アラート・保留事項の統合カラム */}
-          <div className="column-section alert-parking-column">
+          <div className="column-section alert-parking-column" style={{ height: "100%" }}>
             {/* 脱線検知アラートセクション */}
             <div className="alert-section-inner">
               <div className="section-header">
@@ -735,7 +735,7 @@ export default function MeetingActivePage() {
         </div>
 
         {/* フッターアクション */}
-        <div className="footer-actions">
+        <div className="footer-actions" style={{ flexShrink: 0 }}>
           <button className="btn" onClick={handleBackToListClick}>
             一覧に戻る
           </button>
