@@ -1,10 +1,9 @@
 "use client";
 
-import { FC, useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import {
   Box,
   Typography,
-  Button,
   Paper,
   List,
   ListItem,
@@ -14,10 +13,6 @@ import {
   Card,
   CardContent,
 } from "@mui/material";
-import {
-  Mic as MicIcon,
-  Stop as StopIcon,
-} from "@mui/icons-material";
 import { apiClient } from "@/lib/api";
 import { formatElapsedHMSFromMs } from "@/lib/time";
 import type { Transcript } from "@/lib/types";
@@ -25,7 +20,7 @@ import type { Transcript } from "@/lib/types";
 type LiveTranscriptAreaProps = {
   meetingId: string;
   onTranscriptsUpdate?: (transcripts: Transcript[]) => void;
-  autoStart?: boolean; // 自動的に録音を開始するかどうか
+  autoStart?: boolean;
 };
 
 export type LiveTranscriptAreaHandle = {
@@ -37,7 +32,6 @@ type TranscriptItem = {
   timestamp: string;
   text: string;
   speaker?: string;
-  confidence?: number;
 };
 
 /**
@@ -92,10 +86,15 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
       
       setIsProcessing(true);
       
-      // ファイルサイズのチェック
-      if (audioBlob.size < 1000) {
-        console.warn("⚠️ 音声データが小さすぎます:", audioBlob.size);
-        setError("音声データが小さすぎます");
+      // ファイルサイズのチェック（無音データの事前除外）
+      // WebM形式では、正常な10秒の音声データは約10-30KB程度
+      // 無音データは1-3KB程度になる
+      // より厳密な判定はバックエンド側で行う（音声の長さとファイルサイズの比率を計算）
+      const MIN_AUDIO_SIZE = 5 * 1024; // 5KB（正常な10秒の音声データの下限）
+      if (audioBlob.size < MIN_AUDIO_SIZE) {
+        console.warn("⚠️ 音声データが小さすぎます（無音の可能性、送信をスキップ）:", audioBlob.size, "bytes");
+        // エラーを表示せず、静かに無視（ユーザーには影響なし）
+        setIsProcessing(false);
         return;
       }
       
@@ -119,19 +118,57 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         const timestamp = formatElapsedHMSFromMs(now - startTimeRef.current);
         
         // WhisperのJSONからタイムスタンプ情報を除去し、テキストのみを抽出
-        // 包括的なタイムスタンプ除去パターンに対応
         const cleanText = result.text
           .replace(/\[\s*\d{1,2}:\d{2}:\d{2}\.\d{3}\s*[-–>→]+\s*\d{1,2}:\d{2}:\d{2}\.\d{3}\s*\]/g, '') // 通常パターン [00:00:00.000 --> 00:00:02.000]
-          .replace(/\[[\d:\.\-\s>→]+\]/g, '') // 念のため追加（Whisperの変形出力にも対応）
+          .replace(/\[[\d:\.\-\s>→]+\]/g, '')
           .replace(/\s+/g, ' ') // 余分な空白を単一スペースに統一
           .trim();
         
-        const newTranscript: TranscriptItem = {
-          id: result.id || `transcript-${now}`,
-          timestamp, // リアルタイムの経過時間のみ使用
-          text: cleanText, // Whisperのタイムスタンプを除去したテキスト
-          confidence: result.confidence,
-        };
+        // テキストが空になった場合は無視
+        if (!cleanText) {
+          console.warn("⚠️ クリーンアップ後のテキストが空です");
+          setIsProcessing(false);
+          return;
+        }
+        
+        // テキスト内容の妥当性チェック（最小限：明らかに不正なパターンのみ）
+        // 日本語の割合が極端に低い場合（20%未満）のみ除外
+        const japaneseCharPattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g;
+        const japaneseMatches = cleanText.match(japaneseCharPattern);
+        const japaneseCount = japaneseMatches ? japaneseMatches.length : 0;
+        const totalCharCount = cleanText.replace(/\s/g, '').length;
+        const japaneseRatio = totalCharCount > 0 ? japaneseCount / totalCharCount : 0;
+        
+        if (totalCharCount > 5 && japaneseRatio < 0.2) {
+          console.warn("⚠️ 日本語の割合が低すぎます（無視）:", {
+            ratio: `${(japaneseRatio * 100).toFixed(1)}%`,
+            text: cleanText.substring(0, 50),
+          });
+          setIsProcessing(false);
+          return;
+        }
+        
+        const hallucinationPatterns = [
+          /ご視聴.*?ありがとう/,
+          /Thanks?\s+for\s+watching/i,
+          /让我们来看看/,
+          /視聴.*?感謝/,
+          /ご.*?視聴.*?ございました/,
+        ];
+        
+        for (const pattern of hallucinationPatterns) {
+          if (pattern.test(cleanText)) {
+            console.warn("⚠️ 幻聴パターンを検出（無視）:", cleanText.substring(0, 50));
+            setIsProcessing(false);
+            return;
+          }
+        }
+        
+            const newTranscript: TranscriptItem = {
+              id: result.id || `transcript-${now}`,
+              timestamp, // リアルタイムの経過時間のみ使用
+              text: cleanText,
+            };
         
         console.log("📝 新しい文字起こし結果:", newTranscript);
         setTranscripts(prev => {
@@ -232,7 +269,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         if (event.data && event.data.size > 0) {
           console.log("🎵 音声チャンク受信:", event.data.size, "bytes", event.data.type);
           
-          // チャンクを蓄積（完全なWebMファイルを作成するため）
+          // チャンクを蓄積
           audioChunksRef.current.push(event.data);
           
           // データの先頭バイトをログ出力（デバッグ用）
@@ -246,7 +283,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         }
       };
       
-      // 録音停止時の処理（完全なWebMファイルを送信）
+      // 録音停止時の処理
       mediaRecorder.onstop = async () => {
         console.log("🛑 録音停止");
         
@@ -285,10 +322,10 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         setError("録音中にエラーが発生しました");
       };
 
-      // ✅ 30秒ごとに ondataavailable が自動で発火（負荷軽減のため10秒→30秒に変更）
+      // ✅ 30秒ごとに ondataavailable が自動で発火
       mediaRecorder.start(30000);
 
-      // ✅ 30秒ごとに録音を停止→再開（完全なWebMファイルを生成するため）
+      // ✅ 30秒ごとに録音を停止→再開
       const recordingInterval = setInterval(() => {
         if (finalStopRequestedRef.current) {
           // 最終停止要求中は自動サイクルを停止
@@ -395,8 +432,8 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
   }
 
   return (
-    <Card sx={{ height: "500px", display: "flex", flexDirection: "column" }}>
-      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", p: 2 }}>
+    <Card sx={{ height: "100%", display: "flex", flexDirection: "column", boxShadow: "none", borderRadius: 0 }}>
+      <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", p: 2, "&:last-child": { pb: 2 } }}>
       {/* エラー表示 */}
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -410,6 +447,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         sx={{
           flexGrow: 1,
           p: 2,
+          pb: 3,
           backgroundColor: "grey.50",
           overflow: "auto",
         }}
@@ -490,7 +528,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         )}
       </Paper>
 
-      {/* 処理中表示（文字起こしリストの下に配置） */}
+      {/* 処理中表示 */}
       {isProcessing && (
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 2, mt: 2 }}>
           <CircularProgress size={24} sx={{ mr: 1 }} />

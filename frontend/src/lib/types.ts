@@ -36,9 +36,9 @@ export type AgendaItem = {
 export type Transcript = {
   id: string;
   text: string;
-  timestamp: string;
+  timestamp: string; // ISO 8601形式の絶対時刻
+  elapsed_time?: string; // HH:MM:SS形式の経過時間（会議開始時刻からの経過時間）
   speaker?: string;
-  confidence?: number;
 };
 
 // ミニ要約

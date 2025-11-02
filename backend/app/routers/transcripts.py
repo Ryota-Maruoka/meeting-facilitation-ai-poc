@@ -21,6 +21,39 @@ router = APIRouter(prefix="/meetings/{meeting_id}", tags=["transcripts"])
 store = DataStore(settings.data_dir)
 
 
+def _calculate_elapsed_time(meeting_start_iso: str | None, current_iso: str) -> str:
+    """会議開始時刻からの経過時間を計算してHH:MM:SS形式で返す
+
+    Args:
+        meeting_start_iso: 会議開始時刻（ISO 8601形式）、Noneの場合は空文字列を返す
+        current_iso: 現在のタイムスタンプ（ISO 8601形式）
+
+    Returns:
+        HH:MM:SS形式の経過時間
+    """
+    if not meeting_start_iso:
+        return "00:00:00"
+
+    try:
+        start_time = datetime.fromisoformat(meeting_start_iso.replace("Z", "+00:00"))
+        current_time = datetime.fromisoformat(current_iso.replace("Z", "+00:00"))
+        elapsed_ms = (current_time - start_time).total_seconds() * 1000
+
+        # 負の値の場合は00:00:00を返す
+        if elapsed_ms < 0:
+            return "00:00:00"
+
+        total_seconds = int(elapsed_ms / 1000)
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    except (ValueError, AttributeError) as e:
+        logger.warning("Failed to calculate elapsed time: %s", e)
+        return "00:00:00"
+
+
 @router.post("/transcripts")
 def add_transcript(meeting_id: str, chunk: TranscriptChunk) -> dict:
     """文字起こしチャンクを追加する。
@@ -39,8 +72,19 @@ def add_transcript(meeting_id: str, chunk: TranscriptChunk) -> dict:
     if not meeting:
         raise HTTPException(404, "Meeting not found")
 
+    # 文字起こしデータを準備
+    chunk_data = chunk.model_dump()
+    
+    # タイムスタンプを追加（絶対時刻）
+    current_timestamp = datetime.now(timezone.utc).isoformat()
+    chunk_data["timestamp"] = current_timestamp
+    
+    # 経過時間を計算して追加（会議開始時刻が確定している場合）
+    meeting_start_iso = meeting.get("started_at")
+    chunk_data["elapsed_time"] = _calculate_elapsed_time(meeting_start_iso, current_timestamp)
+
     # 新しいストレージ構造: transcripts.jsonに追記
-    store.append_transcript(meeting_id, chunk.model_dump())
+    store.append_transcript(meeting_id, chunk_data)
 
     # 追加後のカウントを取得
     transcripts = store.load_transcripts(meeting_id)
@@ -127,17 +171,29 @@ async def transcribe_audio_upload(
             result = await transcribe_audio_file(temp_file_path)
 
             logger.info("=== 文字起こし完了 ===")
-            print(f"=== 文字起こし完了: {result} ===")
-            logger.info("Transcription completed: %s", result)
+            
+            # ログ出力
+            log_data = {
+                "text": result.get("text", "")[:100] if result.get("text") else "",
+                "language": result.get("language"),
+            }
+            print(f"=== 文字起こし完了: {log_data} ===")
+            logger.info("=== 文字起こし完了: %s ===", log_data)
 
             # 文字起こし結果にIDとタイムスタンプを追加
+            current_timestamp = datetime.now(timezone.utc).isoformat()
             transcript_entry = {
                 "id": str(uuid4()),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": current_timestamp,
                 "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
                 "language": result.get("language", "ja"),
             }
+
+            # 経過時間を計算して追加（会議開始時刻が確定している場合）
+            meeting_start_iso = meeting.get("started_at")
+            transcript_entry["elapsed_time"] = _calculate_elapsed_time(
+                meeting_start_iso, current_timestamp
+            )
 
             # 新しいストレージ構造: transcripts.jsonに追記
             store.append_transcript(meeting_id, transcript_entry)

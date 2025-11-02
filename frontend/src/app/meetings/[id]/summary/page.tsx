@@ -51,7 +51,6 @@ export default function MeetingSummaryPage() {
   // -----------------------------
   const [isLoadingSummary, setIsLoadingSummary] = useState<boolean>(true);
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState<boolean>(true);
-  const [meetingStartedAt, setMeetingStartedAt] = useState<string | undefined>(undefined);
 
   // トースト通知
   const { toasts, showSuccess, removeToast } = useToast();
@@ -100,11 +99,6 @@ export default function MeetingSummaryPage() {
         // APIから会議データを取得
         const meeting = await apiClient.getMeeting(meetingId);
 
-        // 会議開始時刻を状態に保存（タイムスタンプ変換用）
-        if (meeting.started_at) {
-          setMeetingStartedAt(meeting.started_at);
-        }
-
         // APIから要約データを取得
         setIsLoadingSummary(true);
         const summary = await apiClient.getSummary(meetingId);
@@ -134,8 +128,6 @@ export default function MeetingSummaryPage() {
           actualStartTime = `${hours}:${minutes}`;
         }
 
-        const firstIso = Array.isArray(transcripts) && transcripts.length > 0 ? transcripts[0].timestamp : undefined;
-
         setSummaryData({
           ...basicInfo,
           duration: actualDuration,
@@ -150,10 +142,19 @@ export default function MeetingSummaryPage() {
             dueDate: action.due || "",
           })),
           parkingLot: (parkingItems || []).map((p: any) => p.title).filter((t: string) => !!t),
-          transcripts: transcripts.map((t: any) => ({
-            text: t.text,
-            timestamp: formatElapsedHMSFromIso(firstIso, t.timestamp),
-          })),
+          transcripts: transcripts.map((t: any) => {
+            // バックエンドで保存された経過時間を使用（なければフォールバック）
+            let elapsedTime = t.elapsed_time;
+            if (!elapsedTime) {
+              // フォールバック: 既存データで経過時間がない場合は計算
+              const meetingStartIso = meeting.started_at ? meeting.started_at : undefined;
+              elapsedTime = formatElapsedHMSFromIso(meetingStartIso, t.timestamp);
+            }
+            return {
+              text: t.text,
+              timestamp: elapsedTime,
+            };
+          }),
         });
       } catch (error) {
         console.error("Failed to fetch summary data:", error);
@@ -236,44 +237,6 @@ export default function MeetingSummaryPage() {
       }
     };
   }, [meetingId, isLoadingSummary, summaryData.overallSummary]);
-
-  // -----------------------------
-  // ヘルパー関数
-  // -----------------------------
-
-  /**
-   * ISO 8601タイムスタンプを会議開始時刻からの経過時間（HH:MM:SS）に変換
-   * @param isoTimestamp - ISO 8601形式のタイムスタンプ
-   * @param meetingStartTime - 会議開始時刻（ISO 8601形式）
-   * @returns HH:MM:SS形式の経過時間
-   */
-  const formatRelativeTime = (isoTimestamp: string, meetingStartTime: string | undefined): string => {
-    if (!meetingStartTime) {
-      // 会議開始時刻が不明な場合は元のタイムスタンプを返す
-      return isoTimestamp;
-    }
-
-    try {
-      const timestamp = new Date(isoTimestamp);
-      const startTime = new Date(meetingStartTime);
-      const elapsedMs = timestamp.getTime() - startTime.getTime();
-      const elapsedSeconds = Math.floor(elapsedMs / 1000);
-
-      // 負の値の場合は00:00:00を返す
-      if (elapsedSeconds < 0) {
-        return "00:00:00";
-      }
-
-      const hours = Math.floor(elapsedSeconds / 3600);
-      const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-      const seconds = elapsedSeconds % 60;
-
-      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    } catch (error) {
-      console.error("タイムスタンプの変換に失敗しました:", error);
-      return isoTimestamp;
-    }
-  };
 
   // -----------------------------
   // イベントハンドラ
@@ -359,7 +322,7 @@ export default function MeetingSummaryPage() {
                 summaryData.transcripts.map((transcript, index) => (
                   <div key={index} style={{ marginBottom: "12px", paddingBottom: "12px", borderBottom: "1px solid #e6e8ee" }}>
                     <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "4px" }}>
-                      {formatRelativeTime(transcript.timestamp, meetingStartedAt)}
+                      {transcript.timestamp}
                     </div>
                     <div style={{ fontSize: "14px", color: "#374151", lineHeight: "1.6" }}>{transcript.text}</div>
                   </div>

@@ -10,7 +10,7 @@ import json
 import logging
 import re
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any
 
 import httpx
 from pydantic import BaseModel
@@ -84,6 +84,58 @@ class AIDeviationService:
             logger.error(f"脱線検知エラー: {e}", exc_info=True)
             return self._create_error_result(str(e))
     
+    async def check_deviation_with_context(
+        self,
+        latest_chunk: Dict[str, Any],
+        context_chunks: List[Dict[str, Any]],
+        agenda_items: List[Dict[str, Any]],
+        threshold: float = 0.3
+    ) -> DeviationAnalysis:
+        """
+        AIベースのリアルタイム脱線検知（最新チャンク + 過去コンテキスト方式）
+        
+        最新チャンク（30秒）を判定対象とし、過去3チャンク（90秒）をコンテキストとして参照。
+        これにより、重複検知を防ぎつつ精度を保つ。
+        
+        Args:
+            latest_chunk: 最新の文字起こしチャンク（判定対象）
+            context_chunks: 過去の文字起こしチャンク（コンテキスト用、最大3チャンク）
+            agenda_items: アジェンダ項目のリスト（タイトル、期待成果物を含む）
+            threshold: 脱線判定のしきい値
+            
+        Returns:
+            脱線検知分析結果（最新チャンクについての判定）
+        """
+        try:
+            # 最新チャンクのテキストを取得
+            latest_text = latest_chunk.get("text", "").strip()
+            
+            if not latest_text:
+                logger.warning("⚠️ 最新チャンクのテキストが空です")
+                return self._create_no_text_result()
+            
+            # コンテキストテキストを結合（過去3チャンクまで）
+            context_text = ""
+            if context_chunks:
+                context_text = " ".join([
+                    c.get("text", "") for c in context_chunks[-3:]  # 最大3チャンク
+                ]).strip()
+            
+            logger.info("📊 最新チャンク + コンテキスト方式: 最新=%d文字, コンテキスト=%d文字",
+                       len(latest_text), len(context_text))
+            
+            # Azure OpenAI APIでAI脱線検知を実行（最新チャンク + コンテキスト）
+            return await self._check_deviation_ai_with_context(
+                latest_text=latest_text,
+                context_text=context_text,
+                agenda_items=agenda_items,
+                threshold=threshold
+            )
+            
+        except Exception as e:
+            logger.error(f"脱線検知エラー: {e}", exc_info=True)
+            return self._create_error_result(str(e))
+    
     async def _check_deviation_ai(
         self,
         recent_text: str,
@@ -92,17 +144,74 @@ class AIDeviationService:
     ) -> DeviationAnalysis:
         """AIベースの脱線検知（Azure OpenAI使用）"""
         
+        logger.info("🤖 _check_deviation_ai: 開始")
+        logger.info("   入力テキスト長: %d文字", len(recent_text))
+        logger.info("   入力テキスト（最初の200文字）: %s", recent_text[:200])
+        logger.info("   アジェンダ項目数: %d, しきい値: %.2f", len(agenda_items), threshold)
+        
         # プロンプトを構築
         prompt = self._build_deviation_prompt(recent_text, agenda_items, threshold)
+        logger.info("📝 プロンプト長: %d文字", len(prompt))
+        logger.debug("   プロンプト（最初の300文字）: %s", prompt[:300])
         
         try:
             # Azure OpenAI APIを呼び出し
+            logger.info("🌐 Azure OpenAI API呼び出し開始...")
             response = await self._call_azure_openai(prompt)
+            logger.info("✅ Azure OpenAI API呼び出し成功")
+            logger.debug("   AIレスポンス（最初の300文字）: %s", response[:300])
             
             # レスポンスをパース
+            logger.info("📖 AIレスポンスをパース中...")
             analysis = self._parse_ai_response(response, recent_text, agenda_items)
             
-            logger.info(f"AI脱線検知完了: is_deviation={analysis.is_deviation}, confidence={analysis.confidence}")
+            logger.info("✅ AI脱線検知完了: is_deviation=%s, similarity_score=%.3f, confidence=%.3f",
+                       analysis.is_deviation, analysis.similarity_score, analysis.confidence)
+            logger.info("📌 最適アジェンダ: %s", analysis.best_agenda)
+            logger.info("💬 メッセージ: %s", analysis.message)
+            logger.info("🔍 判定理由（最初の200文字）: %s", analysis.reasoning[:200])
+            return analysis
+            
+        except Exception as e:
+            logger.error(f"Azure OpenAI API呼び出しエラー: {e}")
+            raise  # エラーを上位に伝播
+    
+    async def _check_deviation_ai_with_context(
+        self,
+        latest_text: str,
+        context_text: str,
+        agenda_items: List[Dict[str, Any]],
+        threshold: float
+    ) -> DeviationAnalysis:
+        """AIベースの脱線検知（最新チャンク + 過去コンテキスト、Azure OpenAI使用）"""
+        
+        logger.info("🤖 _check_deviation_ai_with_context: 開始")
+        logger.info("   最新チャンク長: %d文字", len(latest_text))
+        logger.info("   最新チャンク（最初の200文字）: %s", latest_text[:200])
+        logger.info("   コンテキスト長: %d文字", len(context_text))
+        logger.info("   アジェンダ項目数: %d, しきい値: %.2f", len(agenda_items), threshold)
+        
+        # プロンプトを構築（最新チャンク + コンテキスト）
+        prompt = self._build_deviation_prompt_with_context(latest_text, context_text, agenda_items, threshold)
+        logger.info("📝 プロンプト長: %d文字", len(prompt))
+        logger.debug("   プロンプト（最初の300文字）: %s", prompt[:300])
+        
+        try:
+            # Azure OpenAI APIを呼び出し
+            logger.info("🌐 Azure OpenAI API呼び出し開始...")
+            response = await self._call_azure_openai(prompt)
+            logger.info("✅ Azure OpenAI API呼び出し成功")
+            logger.debug("   AIレスポンス（最初の300文字）: %s", response[:300])
+            
+            # レスポンスをパース
+            logger.info("📖 AIレスポンスをパース中...")
+            analysis = self._parse_ai_response(response, latest_text, agenda_items)
+            
+            logger.info("✅ AI脱線検知完了: is_deviation=%s, similarity_score=%.3f, confidence=%.3f",
+                       analysis.is_deviation, analysis.similarity_score, analysis.confidence)
+            logger.info("📌 最適アジェンダ: %s", analysis.best_agenda)
+            logger.info("💬 メッセージ: %s", analysis.message)
+            logger.info("🔍 判定理由（最初の200文字）: %s", analysis.reasoning[:200])
             return analysis
             
         except Exception as e:
@@ -138,53 +247,97 @@ class AIDeviationService:
 ## 分析対象の発話
 {recent_text}
 
-## 関連度の計算方法（明示的）
-関連度は以下の要素を総合的に評価して0.0-1.0のスコアで算出します：
+## 関連度計算（合計0.0-1.0）
+1. 意味的関連性: 0.0-0.6（議題・期待成果物との合致度）
+2. キーワード: 0.0-0.2（重要語の一致）
+3. 文脈整合性: 0.0-0.2（会議目的との整合）
 
-1. **意味的関連性（最重要）** (0.0-0.6点)
-   - 発話内容がアジェンダの議題や期待成果物と意味的に合致しているか
-   - 同じトピックや目的を議論しているか
-   - 例：「認証方式」について話している → 認証方式に関する議題と関連度高
+## 判定
+- 関連度 < {threshold} → 脱線
+- 関連度 >= {threshold} → アジェンダに沿っている
 
-2. **キーワードマッチング** (0.0-0.2点)
-   - アジェンダの議題タイトルや期待成果物に含まれる重要なキーワードが発話に含まれているか
-   - ただし、単純なキーワードマッチのみでは判定しない
-
-3. **文脈の整合性** (0.0-0.2点)
-   - 発話内容が会議の目的やアジェンダの流れと整合しているか
-   - 議論が自然に発展しているか
-
-## 判定基準
-- しきい値: {threshold}
-- **関連度が{threshold}未満の場合、脱線と判定**
-- **関連度が{threshold}以上の場合、アジェンダに沿った発話と判定**
-
-## 脱線と判定される具体的な例
-- 完全に無関係な話題（雑談、個人的な話、他の会議の話など）
-- アジェンダの議題や期待成果物と全く関係ない技術的な議論
-- 会議の目的から外れた業務の話
-
-## アジェンダに沿った発話と判定される例
-- アジェンダの議題タイトルや期待成果物に関連する内容を議論している
-- 議題の前提条件や関連情報を説明している
-- 期待成果物を達成するための議論や質問
-
-## 出力形式（JSON）
+## 出力（JSONのみ）
 {{
     "is_deviation": true/false,
     "confidence": 0.0-1.0,
     "similarity_score": 0.0-1.0,
-    "best_agenda": "最も関連性の高いアジェンダの議題タイトル",
-    "reasoning": "関連度の算出根拠と判定理由を具体的に説明（意味的関連性、キーワードマッチ、文脈の整合性それぞれの評価を記載）",
-    "suggested_agenda": ["関連性が高いアジェンダの議題タイトル1", "関連性が高いアジェンダの議題タイトル2"]
+    "best_agenda": "議題タイトル",
+    "reasoning": "簡潔に（3行程度）：各要素のスコアと根拠",
+    "suggested_agenda": ["議題1", "議題2"]
 }}
 
-## 重要な注意事項
-- 関連度は上記3要素（意味的関連性、キーワードマッチング、文脈の整合性）の合計で算出
-- 判定理由には各要素の評価スコアと根拠を明記
-- アジェンダの期待成果物も必ず考慮して判定すること
+期待成果物も考慮してください。JSONのみ出力。
+"""
+        return prompt
+    
+    def _build_deviation_prompt_with_context(
+        self,
+        latest_text: str,
+        context_text: str,
+        agenda_items: List[Dict[str, Any]],
+        threshold: float
+    ) -> str:
+        """脱線検知用のプロンプトを構築（最新チャンク + 過去コンテキスト方式）"""
+        
+        # アジェンダ項目を詳細に記述（タイトル + 期待成果物）
+        agenda_list = []
+        for idx, item in enumerate(agenda_items, 1):
+            title = item.get("title", "")
+            expected_outcome = item.get("expectedOutcome", "")
+            duration = item.get("duration", 0)
+            
+            agenda_str = f"{idx}. 【議題】{title}"
+            if expected_outcome:
+                agenda_str += f"\n    【期待成果物】{expected_outcome}"
+            if duration:
+                agenda_str += f"\n    【所要時間】{duration}分"
+            
+            agenda_list.append(agenda_str)
+        
+        agenda_text = "\n\n".join(agenda_list)
+        
+        # コンテキスト部分の記述
+        context_section = ""
+        if context_text:
+            context_section = f"""
+## 過去の発話（コンテキスト参考用）
+以下の発話は過去90秒の内容です。参考情報として使用してください。判定対象ではありません。
 
-JSONのみを出力してください。
+{context_text}
+"""
+        
+        prompt = f"""
+あなたは会議ファシリテーションの専門家です。以下の会議の**最新の発話内容**が、設定されたアジェンダ（議題と期待成果物）から脱線しているかを厳密に分析してください。
+
+## アジェンダ（議題と期待成果物）
+{agenda_text}
+{context_section}
+## 分析対象の発話（最新30秒）
+**重要**: 以下が判定対象です。過去のコンテキストは参考情報としてのみ使用してください。
+
+{latest_text}
+
+## 関連度計算（合計0.0-1.0）
+1. 意味的関連性: 0.0-0.6（議題・期待成果物との合致度）
+2. キーワード: 0.0-0.2（重要語の一致）
+3. 文脈整合性: 0.0-0.2（会議目的との整合）
+
+## 判定
+- 関連度 < {threshold} → 脱線
+- 関連度 >= {threshold} → アジェンダに沿っている
+
+## 出力（JSONのみ）
+{{
+    "is_deviation": true/false,
+    "confidence": 0.0-1.0,
+    "similarity_score": 0.0-1.0,
+    "best_agenda": "議題タイトル",
+    "reasoning": "簡潔に（3行程度）：各要素のスコアと根拠（最新チャンクを判定した理由）",
+    "suggested_agenda": ["議題1", "議題2"]
+}}
+
+**判定は最新30秒の発話のみを対象**にしてください。過去のコンテキストは文脈理解のためだけです。
+期待成果物も考慮してください。JSONのみ出力。
 """
         return prompt
     
@@ -201,18 +354,21 @@ JSONのみを出力してください。
             "messages": [
                 {
                     "role": "system",
-                    "content": "あなたは会議ファシリテーションの専門家です。JSON形式で正確に回答してください。"
+                    "content": "あなたは会議ファシリテーションの専門家です。必ずJSON形式のみで回答してください。JSON以外のテキストは一切出力しないでください。"
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            "max_completion_tokens": 1000
+            "max_completion_tokens": 2000,  # reasoningモデル用に増加（1000→2000）
+            "response_format": {"type": "json_object"}  # JSON出力を強制
         }
         
-        logger.info(f"Azure OpenAI API呼び出し: {url}")
-        logger.info(f"APIバージョン: {self.api_version}")
+        logger.info(f"🌐 Azure OpenAI API呼び出し: {url}")
+        logger.info(f"   APIバージョン: {self.api_version}")
+        logger.info(f"   デプロイメント: {self.deployment}")
+        logger.info(f"   プロンプトトークン数（推定）: {len(prompt.split())}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -224,7 +380,31 @@ JSONのみを出力してください。
             response.raise_for_status()
             
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+            
+            # レスポンスの詳細をログ出力
+            usage = result.get("usage", {})
+            logger.info(f"📊 API使用量: prompt_tokens={usage.get('prompt_tokens', 0)}, "
+                       f"completion_tokens={usage.get('completion_tokens', 0)}, "
+                       f"total_tokens={usage.get('total_tokens', 0)}")
+            
+            if "completion_tokens_details" in usage:
+                reasoning_tokens = usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0)
+                logger.info(f"   reasoning_tokens: {reasoning_tokens}")
+            
+            finish_reason = result.get("choices", [{}])[0].get("finish_reason", "")
+            logger.info(f"   完了理由: {finish_reason}")
+            
+            # レスポンスの内容をデバッグログに出力
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            logger.info(f"📥 APIレスポンス長: {len(content)}文字")
+            logger.debug(f"   APIレスポンス内容（最初の500文字）: {content[:500]}")
+            
+            if not content:
+                logger.error(f"❌ Azure OpenAI APIから空のレスポンス")
+                logger.error(f"   レスポンス全体: {result}")
+                raise ValueError("Azure OpenAI APIから空のレスポンスが返されました")
+            
+            return content
     
     def _parse_ai_response(
         self,
@@ -268,7 +448,10 @@ JSONのみを出力してください。
             )
             
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"AIレスポンスのパースエラー: {e}, response: {response}")
+            logger.error(f"❌ AIレスポンスのパースエラー: {e}")
+            logger.error(f"   レスポンス内容（最初の500文字）: {response[:500] if response else '(空)'}")
+            logger.error(f"   レスポンス長: {len(response) if response else 0}")
+            logger.error(f"   エラー詳細: {type(e).__name__}")
             # フォールバック: デフォルト値を返す
             agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
             return DeviationAnalysis(
@@ -279,7 +462,7 @@ JSONのみを出力してください。
                 message="AI分析に失敗しました",
                 suggested_agenda=agenda_titles[:2] if agenda_titles else [],
                 recent_text=recent_text,
-                reasoning="AIレスポンスのパースに失敗",
+                reasoning=f"AIレスポンスのパースに失敗: {str(e)}",
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
     

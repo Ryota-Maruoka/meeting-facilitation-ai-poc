@@ -98,7 +98,6 @@ export default function MeetingActivePage() {
     handleAddToParkingLot,
     handleIgnoreDeviation,
     clearAllAlerts,
-    addTestAlert,
   } = useDeviationDetection({
     meetingId,
     transcripts,
@@ -242,8 +241,8 @@ export default function MeetingActivePage() {
       return {
         title: item.title,
         duration: item.duration,
-        completed: completed, // 小数を保持してスムーズなアニメーションに
-        completedMinutes: Math.floor(completed), // 表示用は整数
+        completed: completed,
+        completedMinutes: Math.floor(completed),
       };
     });
   };
@@ -472,17 +471,17 @@ export default function MeetingActivePage() {
   }
 
   return (
-    <div className="page" style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <div className="page" style={{ height: "100vh", overflow: "auto", display: "flex", flexDirection: "column" }}>
       <style suppressHydrationWarning>{commonStyles}</style>
 
-      <div className="page-container" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <div className="page-container" style={{ display: "flex", flexDirection: "column", minHeight: "100%", overflow: "visible" }}>
         {/* ヘッダー */}
         <div className="meeting-header" style={{ flexShrink: 0 }}>
           <div className="meeting-title">会議中画面</div>
         </div>
 
         {/* ボディコンテンツ */}
-        <div className="body-content" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="body-content" style={{ display: "flex", flexDirection: "column", minHeight: 0, justifyContent: "flex-start" }}>
           {/* 会議情報セクション */}
           <div className="meeting-info-section" style={{ paddingLeft: "24px", paddingRight: "24px", flexShrink: 0 }}>
           <div className="meeting-info" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
@@ -550,14 +549,19 @@ export default function MeetingActivePage() {
         </div>
 
         {/* 3カラムレイアウト */}
-        <div className="three-column-layout" style={{ flex: 1, overflow: "hidden", minHeight: 0, padding: "8px 0" }}>
+        <div className="three-column-layout" style={{ 
+          height: "600px",
+          overflow: "hidden", 
+          flexShrink: 0,
+          padding: "8px 0" 
+        }}>
           {/* 文字起こし（LiveTranscriptArea統合） */}
-          <div className="column-section" style={{ height: "100%" }}>
-            <div className="section-header">
+          <div className="column-section" style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div className="section-header" style={{ flexShrink: 0 }}>
               <span className="material-icons icon-sm">{ICONS.TRANSCRIBE}</span>
               <span>文字起こし</span>
             </div>
-            <div className="section-content">
+            <div className="section-content" style={{ flex: 1, overflow: "hidden", minHeight: 0, padding: 0 }}>
               <LiveTranscriptArea
                 ref={transcriptRef}
                 meetingId={meetingId}
@@ -568,12 +572,12 @@ export default function MeetingActivePage() {
           </div>
 
           {/* 要約 */}
-          <div className="column-section" style={{ height: "100%" }}>
-            <div className="section-header">
+          <div className="column-section" style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div className="section-header" style={{ flexShrink: 0 }}>
               <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
               <span>要約</span>
             </div>
-            <div className="section-content">
+            <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
               {!isRecordingStarted || !isMeetingStarted ? (
                 <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
                   文字起こしが開始されると要約が自動生成されます
@@ -618,10 +622,10 @@ export default function MeetingActivePage() {
           </div>
 
           {/* アラート・保留事項の統合カラム */}
-          <div className="column-section alert-parking-column" style={{ height: "100%" }}>
+          <div className="column-section alert-parking-column" style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/* 脱線検知アラートセクション */}
-            <div className="alert-section-inner">
-              <div className="section-header">
+            <div className="alert-section-inner" style={{ flex: 1.5, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", padding: 0 }}>
+              <div className="section-header" style={{ flexShrink: 0, padding: "0 16px" }}>
                 <span className="material-icons icon-sm">{ICONS.ALERT}</span>
                 <span>脱線検知アラート</span>
                 {alerts.length > 0 && (
@@ -634,18 +638,8 @@ export default function MeetingActivePage() {
                     (検知中...)
                   </span>
                 )}
-                {/* 🧪 テスト用アラート追加ボタン（開発時のみ） */}
-                {process.env.NODE_ENV === "development" && (
-                  <button 
-                    className="btn btn-sm" 
-                    style={{ marginLeft: "auto" }}
-                    onClick={() => addTestAlert()}
-                  >
-                    テストアラート追加
-                  </button>
-                )}
               </div>
-              <div className="section-content alerts-container">
+              <div className="section-content alerts-container" style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 16px 16px 16px" }}>
                 {alerts.length > 0 ? (
                   <div className="alerts-list">
                     {alerts.map((alert) => {
@@ -705,8 +699,8 @@ export default function MeetingActivePage() {
             </div>
 
             {/* 保留事項セクション */}
-            <div className="parking-section-inner">
-              <div className="section-header">
+            <div className="parking-section-inner" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", padding: 0 }}>
+              <div className="section-header" style={{ flexShrink: 0, padding: "16px 16px 12px 16px" }}>
                 <span className="material-icons icon-sm">{ICONS.PARKING}</span>
                 <span>{PARKING_LOT_LABEL}</span>
                 {parkingLot.length > 0 && (
@@ -715,7 +709,7 @@ export default function MeetingActivePage() {
                   </span>
                 )}
               </div>
-              <div className="section-content">
+              <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 16px 16px 16px" }}>
                 {parkingLot.length === 0 ? (
                   <div className="empty-state">{PARKING_LOT_LABEL}は空です</div>
                 ) : (
@@ -735,20 +729,10 @@ export default function MeetingActivePage() {
         </div>
 
         {/* フッターアクション */}
-        <div className="footer-actions" style={{ flexShrink: 0 }}>
+        <div className="footer-actions" style={{ position: "sticky", bottom: 0, zIndex: 10, backgroundColor: "#ffffff", flexShrink: 0, paddingLeft: "15%", paddingRight: "15%", marginTop: "24px", paddingTop: "16px", paddingBottom: "16px", boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.1)" }}>
           <button className="btn" onClick={handleBackToListClick}>
             一覧に戻る
           </button>
-          {isMeetingStarted && (
-            <button 
-              className="btn btn-warning" 
-              onClick={checkDeviation}
-              disabled={isCheckingDeviation || transcripts.length < 3}
-              style={{ marginRight: "8px" }}
-            >
-              {isCheckingDeviation ? "検知中..." : "脱線検知実行"}
-            </button>
-          )}
           <button className="btn btn-danger btn-large" onClick={handleEndMeetingClick}>
             会議終了
           </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { FC } from "react";
+import { FC, useState } from "react";
 import {
   Alert,
   Box,
@@ -12,8 +12,12 @@ import {
   Warning as WarningIcon,
   LocalParking as ParkingIcon,
   Close as CloseIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from "@mui/icons-material";
 import type { DeviationAlert } from "@/lib/types";
+
+const MAX_PREVIEW_LENGTH = 50;
 
 type DeviationAlertProps = {
   alert: DeviationAlert;
@@ -38,6 +42,8 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
   timestamp,
   isLoading = false,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const handleAddToParkingLot = () => {
     // タイトルなしでコンテンツのみ送信（バックエンドで自動生成）
     onAddToParkingLot?.(alert.recent_text, false);
@@ -46,6 +52,17 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
   const handleDismiss = () => {
     onDismiss?.();
   };
+
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
+  };
+
+  // 表示テキストの決定（50文字以上の場合のみ省略）
+  const displayText = isExpanded
+    ? alert.recent_text
+    : alert.recent_text.substring(0, MAX_PREVIEW_LENGTH);
+  
+  const shouldShowExpandButton = alert.recent_text.length > MAX_PREVIEW_LENGTH;
 
   return (
     <Alert
@@ -68,9 +85,34 @@ const DeviationAlertComponent: FC<DeviationAlertProps> = ({
         
         {/* 検知した発話内容 */}
         {alert.recent_text && (
-          <Typography variant="body2" sx={{ mb: 2, fontStyle: "italic" }}>
-            "{alert.recent_text}"
-          </Typography>
+          <Box sx={{ mb: 2 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontStyle: "italic",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                mb: shouldShowExpandButton ? 1 : 0,
+              }}
+            >
+              "{displayText}{!isExpanded && shouldShowExpandButton ? "..." : ""}"
+            </Typography>
+            {shouldShowExpandButton && (
+              <Button
+                size="small"
+                onClick={toggleExpand}
+                startIcon={isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                sx={{
+                  textTransform: "none",
+                  fontSize: "0.75rem",
+                  minWidth: "auto",
+                  padding: "4px 8px",
+                }}
+              >
+                {isExpanded ? "閉じる" : "もっと見る"}
+              </Button>
+            )}
+          </Box>
         )}
         
         {/* アクションボタン（2つのみ） */}
