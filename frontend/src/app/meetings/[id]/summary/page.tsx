@@ -33,6 +33,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import ReactMarkdown from "react-markdown";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, SUMMARY_PAGE_TITLE, DOWNLOAD_FORMAT_LABELS } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
@@ -278,7 +279,9 @@ export default function MeetingSummaryPage() {
                   <span>読み込み中...</span>
                 </div>
               ) : (
-                <p style={{ lineHeight: 1.8 }}>{summaryData.overallSummary}</p>
+                <div style={{ lineHeight: 1.8 }}>
+                  <ReactMarkdown>{summaryData.overallSummary}</ReactMarkdown>
+                </div>
               )}
             </div>
           </div>

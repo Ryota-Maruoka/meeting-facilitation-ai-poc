@@ -26,6 +26,8 @@ last_update: "2025-02-11"
 | ドキュメント | 説明 | 最終更新 |
 |------------|------|----------|
 | [apps/backend/overview.md](apps/backend/overview.md) | バックエンドアーキテクチャ概要 | 2025-02-11 |
+| [apps/backend/storage-design.md](apps/backend/storage-design.md) | データストレージ設計書 | 2025-02-11 |
+| [apps/backend/environment-design.md](apps/backend/environment-design.md) | 環境変数設計書 | 2025-02-11 |
 
 **主要内容**:
 - FastAPI + Python 3.11+の技術スタック
@@ -33,6 +35,8 @@ last_update: "2025-02-11"
 - Azure OpenAI API連携
 - JSONファイルベースのデータストレージ
 - API仕様・データモデル・環境変数設定
+- データストレージ詳細仕様（JSONファイル構造、DataStoreクラスAPI）
+- 環境変数一覧と環境別設定値（dev/staging/prod）
 
 ### Frontend
 
@@ -113,10 +117,12 @@ last_update: "2025-02-11"
 
 ---
 
-## 📅 最近の更新（直近5件）
+## 📅 最近の更新（直近7件）
 
 | 日付 | ドキュメント | 変更内容 |
 |------|------------|---------|
+| 2025-02-11 | apps/backend/storage-design.md | データストレージ設計書を作成 |
+| 2025-02-11 | apps/backend/environment-design.md | 環境変数設計書を作成 |
 | 2025-02-11 | apps/backend/overview.md | バックエンドアーキテクチャ概要を更新 |
 | 2025-02-11 | apps/frontend/overview.md | フロントエンドアーキテクチャ概要を更新 |
 | 2025-02-11 | features/meetings/spec.md | 会議管理機能の要件定義書を作成 |
@@ -135,7 +141,8 @@ last_update: "2025-02-11"
 | 会議管理機能の要件を確認したい | [features/meetings/spec.md](features/meetings/spec.md) |
 | 会議管理機能の処理フローを確認したい | [features/meetings/design.md](features/meetings/design.md) |
 | 会議管理APIの仕様を確認したい | [features/meetings/api/contracts.md](features/meetings/api/contracts.md) |
-| 環境変数設定を確認したい | [apps/backend/overview.md § 5](apps/backend/overview.md) |
+| データストレージの仕様を確認したい | [apps/backend/storage-design.md](apps/backend/storage-design.md) |
+| 環境変数設定を確認したい | [apps/backend/environment-design.md](apps/backend/environment-design.md) |
 | データモデルを確認したい | [features/meetings/spec.md § 5](features/meetings/spec.md) |
 | 新機能の設計を始めたい | [TEMPLATE-feature-spec.md](templates/TEMPLATE-feature-spec.md) をコピー |
 | アーキテクチャ決定を記録したい | [TEMPLATE-adr.md](templates/TEMPLATE-adr.md) をコピーして `adr/` 配下に作成 |
