@@ -249,11 +249,6 @@ export default function MeetingActivePage() {
   };
 
   const agendaProgress = calculateAgendaProgress();
-  
-  // アジェンダの数に応じてスクロール設定を調整
-  // 3つ以下：スクロールなし、4つ以上：スクロール可能
-  const agendaCount = meetingData?.agenda?.length || 0;
-  const shouldEnableScroll = agendaCount > 3;
 
   // -----------------------------
   // イベントハンドラ
@@ -477,17 +472,17 @@ export default function MeetingActivePage() {
   }
 
   return (
-    <div className="page" style={{ height: "100vh", overflow: shouldEnableScroll ? "auto" : "hidden", display: "flex", flexDirection: "column" }}>
+    <div className="page" style={{ height: "100vh", overflow: "auto", display: "flex", flexDirection: "column" }}>
       <style suppressHydrationWarning>{commonStyles}</style>
 
-      <div className="page-container" style={{ display: "flex", flexDirection: "column", height: shouldEnableScroll ? undefined : "100%", overflow: "hidden" }}>
+      <div className="page-container" style={{ display: "flex", flexDirection: "column", minHeight: "100%", overflow: "visible" }}>
         {/* ヘッダー */}
         <div className="meeting-header" style={{ flexShrink: 0 }}>
           <div className="meeting-title">会議中画面</div>
         </div>
 
         {/* ボディコンテンツ */}
-        <div className="body-content" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, justifyContent: "flex-start" }}>
+        <div className="body-content" style={{ display: "flex", flexDirection: "column", minHeight: 0, justifyContent: "flex-start" }}>
           {/* 会議情報セクション */}
           <div className="meeting-info-section" style={{ paddingLeft: "24px", paddingRight: "24px", flexShrink: 0 }}>
           <div className="meeting-info" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
@@ -556,10 +551,9 @@ export default function MeetingActivePage() {
 
         {/* 3カラムレイアウト */}
         <div className="three-column-layout" style={{ 
-          flex: shouldEnableScroll ? undefined : 1, 
-          height: shouldEnableScroll ? "500px" : undefined,
+          height: "600px",
           overflow: "hidden", 
-          minHeight: shouldEnableScroll ? "500px" : 0, 
+          flexShrink: 0,
           padding: "8px 0" 
         }}>
           {/* 文字起こし（LiveTranscriptArea統合） */}
@@ -631,8 +625,8 @@ export default function MeetingActivePage() {
           {/* アラート・保留事項の統合カラム */}
           <div className="column-section alert-parking-column" style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
             {/* 脱線検知アラートセクション */}
-            <div className="alert-section-inner" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-              <div className="section-header" style={{ flexShrink: 0 }}>
+            <div className="alert-section-inner" style={{ flex: 1.5, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", padding: 0 }}>
+              <div className="section-header" style={{ flexShrink: 0, padding: "0 16px" }}>
                 <span className="material-icons icon-sm">{ICONS.ALERT}</span>
                 <span>脱線検知アラート</span>
                 {alerts.length > 0 && (
@@ -656,7 +650,7 @@ export default function MeetingActivePage() {
                   </button>
                 )}
               </div>
-              <div className="section-content alerts-container" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
+              <div className="section-content alerts-container" style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 16px 16px 16px" }}>
                 {alerts.length > 0 ? (
                   <div className="alerts-list">
                     {alerts.map((alert) => {
@@ -716,8 +710,8 @@ export default function MeetingActivePage() {
             </div>
 
             {/* 保留事項セクション */}
-            <div className="parking-section-inner" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-              <div className="section-header" style={{ flexShrink: 0 }}>
+            <div className="parking-section-inner" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden", padding: 0 }}>
+              <div className="section-header" style={{ flexShrink: 0, padding: "16px 16px 12px 16px" }}>
                 <span className="material-icons icon-sm">{ICONS.PARKING}</span>
                 <span>{PARKING_LOT_LABEL}</span>
                 {parkingLot.length > 0 && (
@@ -726,7 +720,7 @@ export default function MeetingActivePage() {
                   </span>
                 )}
               </div>
-              <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
+              <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 16px 16px 16px" }}>
                 {parkingLot.length === 0 ? (
                   <div className="empty-state">{PARKING_LOT_LABEL}は空です</div>
                 ) : (
@@ -746,7 +740,7 @@ export default function MeetingActivePage() {
         </div>
 
         {/* フッターアクション */}
-        <div className="footer-actions" style={{ flexShrink: 0, paddingLeft: "15%", paddingRight: "15%", marginTop: "auto" }}>
+        <div className="footer-actions" style={{ position: "sticky", bottom: 0, zIndex: 10, backgroundColor: "#ffffff", flexShrink: 0, paddingLeft: "15%", paddingRight: "15%", marginTop: "24px", paddingTop: "16px", paddingBottom: "16px", boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.1)" }}>
           <button className="btn" onClick={handleBackToListClick}>
             一覧に戻る
           </button>
