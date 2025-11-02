@@ -92,17 +92,32 @@ class AIDeviationService:
     ) -> DeviationAnalysis:
         """AIベースの脱線検知（Azure OpenAI使用）"""
         
+        logger.info("🤖 _check_deviation_ai: 開始")
+        logger.info("   入力テキスト長: %d文字", len(recent_text))
+        logger.info("   入力テキスト（最初の200文字）: %s", recent_text[:200])
+        logger.info("   アジェンダ項目数: %d, しきい値: %.2f", len(agenda_items), threshold)
+        
         # プロンプトを構築
         prompt = self._build_deviation_prompt(recent_text, agenda_items, threshold)
+        logger.info("📝 プロンプト長: %d文字", len(prompt))
+        logger.debug("   プロンプト（最初の300文字）: %s", prompt[:300])
         
         try:
             # Azure OpenAI APIを呼び出し
+            logger.info("🌐 Azure OpenAI API呼び出し開始...")
             response = await self._call_azure_openai(prompt)
+            logger.info("✅ Azure OpenAI API呼び出し成功")
+            logger.debug("   AIレスポンス（最初の300文字）: %s", response[:300])
             
             # レスポンスをパース
+            logger.info("📖 AIレスポンスをパース中...")
             analysis = self._parse_ai_response(response, recent_text, agenda_items)
             
-            logger.info(f"AI脱線検知完了: is_deviation={analysis.is_deviation}, confidence={analysis.confidence}")
+            logger.info("✅ AI脱線検知完了: is_deviation=%s, similarity_score=%.3f, confidence=%.3f",
+                       analysis.is_deviation, analysis.similarity_score, analysis.confidence)
+            logger.info("📌 最適アジェンダ: %s", analysis.best_agenda)
+            logger.info("💬 メッセージ: %s", analysis.message)
+            logger.info("🔍 判定理由（最初の200文字）: %s", analysis.reasoning[:200])
             return analysis
             
         except Exception as e:
@@ -185,8 +200,10 @@ class AIDeviationService:
             "response_format": {"type": "json_object"}  # JSON出力を強制
         }
         
-        logger.info(f"Azure OpenAI API呼び出し: {url}")
-        logger.info(f"APIバージョン: {self.api_version}")
+        logger.info(f"🌐 Azure OpenAI API呼び出し: {url}")
+        logger.info(f"   APIバージョン: {self.api_version}")
+        logger.info(f"   デプロイメント: {self.deployment}")
+        logger.info(f"   プロンプトトークン数（推定）: {len(prompt.split())}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -199,12 +216,27 @@ class AIDeviationService:
             
             result = response.json()
             
+            # レスポンスの詳細をログ出力
+            usage = result.get("usage", {})
+            logger.info(f"📊 API使用量: prompt_tokens={usage.get('prompt_tokens', 0)}, "
+                       f"completion_tokens={usage.get('completion_tokens', 0)}, "
+                       f"total_tokens={usage.get('total_tokens', 0)}")
+            
+            if "completion_tokens_details" in usage:
+                reasoning_tokens = usage.get("completion_tokens_details", {}).get("reasoning_tokens", 0)
+                logger.info(f"   reasoning_tokens: {reasoning_tokens}")
+            
+            finish_reason = result.get("choices", [{}])[0].get("finish_reason", "")
+            logger.info(f"   完了理由: {finish_reason}")
+            
             # レスポンスの内容をデバッグログに出力
             content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-            logger.debug(f"Azure OpenAI APIレスポンス内容: {content[:500]}")  # 最初の500文字をログ出力
+            logger.info(f"📥 APIレスポンス長: {len(content)}文字")
+            logger.debug(f"   APIレスポンス内容（最初の500文字）: {content[:500]}")
             
             if not content:
-                logger.error(f"Azure OpenAI APIから空のレスポンス: {result}")
+                logger.error(f"❌ Azure OpenAI APIから空のレスポンス")
+                logger.error(f"   レスポンス全体: {result}")
                 raise ValueError("Azure OpenAI APIから空のレスポンスが返されました")
             
             return content
@@ -251,9 +283,10 @@ class AIDeviationService:
             )
             
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"AIレスポンスのパースエラー: {e}")
-            logger.error(f"レスポンス内容（最初の500文字）: {response[:500] if response else '(空)'}")
-            logger.error(f"レスポンス長: {len(response) if response else 0}")
+            logger.error(f"❌ AIレスポンスのパースエラー: {e}")
+            logger.error(f"   レスポンス内容（最初の500文字）: {response[:500] if response else '(空)'}")
+            logger.error(f"   レスポンス長: {len(response) if response else 0}")
+            logger.error(f"   エラー詳細: {type(e).__name__}")
             # フォールバック: デフォルト値を返す
             agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
             return DeviationAnalysis(

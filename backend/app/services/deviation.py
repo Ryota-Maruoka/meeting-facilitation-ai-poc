@@ -55,6 +55,14 @@ async def check_realtime_deviation(
         脱線検知結果の辞書
     """
     try:
+        logger.info("🔍 check_realtime_deviation: 開始")
+        logger.info("   入力データ: transcripts数=%d, agenda_items数=%d, threshold=%.2f, consecutive_chunks=%d",
+                   len(recent_transcripts), len(agenda_items), threshold, consecutive_chunks)
+        
+        # 直近の文字起こしテキストを結合（デバッグ用）
+        recent_text_combined = " ".join([t.get("text", "") for t in recent_transcripts[-consecutive_chunks:]]).strip()
+        logger.info("   結合された発話テキスト（最初の200文字）: %s", recent_text_combined[:200])
+        
         # AIベースの脱線検知を実行
         analysis = await ai_deviation_service.check_deviation(
             recent_transcripts=recent_transcripts,
@@ -63,8 +71,11 @@ async def check_realtime_deviation(
             consecutive_chunks=consecutive_chunks
         )
         
+        logger.info("✅ AI脱線検知完了: is_deviation=%s, similarity_score=%.3f, confidence=%.3f",
+                   analysis.is_deviation, analysis.similarity_score, analysis.confidence)
+        
         # DeviationAnalysisを辞書形式に変換
-        return {
+        result = {
             "is_deviation": analysis.is_deviation,
             "confidence": analysis.confidence,
             "similarity_score": analysis.similarity_score,
@@ -76,8 +87,17 @@ async def check_realtime_deviation(
             "timestamp": analysis.timestamp
         }
         
+        logger.info("📤 返却データ: %s", {
+            "is_deviation": result["is_deviation"],
+            "similarity_score": result["similarity_score"],
+            "best_agenda": result["best_agenda"],
+            "message": result["message"][:100],
+        })
+        
+        return result
+        
     except Exception as e:
-        logger.error(f"AI脱線検知エラー: {e}", exc_info=True)
+        logger.error(f"❌ AI脱線検知エラー: {e}", exc_info=True)
         
         # フォールバック: 従来の手法を使用
         agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
@@ -106,9 +126,13 @@ def _check_deviation_fallback(
         return {
             "is_deviation": False,
             "confidence": 0.0,
+            "similarity_score": 0.0,
+            "best_agenda": "",
             "message": "データ不足",
             "suggested_agenda": [],
-            "reasoning": "文字起こしデータが不足（フォールバック）"
+            "recent_text": "",
+            "reasoning": "文字起こしデータが不足（フォールバック）",
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     # 直近の文字起こし結果を結合
@@ -118,9 +142,13 @@ def _check_deviation_fallback(
         return {
             "is_deviation": False,
             "confidence": 0.0,
+            "similarity_score": 0.0,
+            "best_agenda": "",
             "message": "テキストが空",
             "suggested_agenda": [],
-            "reasoning": "文字起こしテキストが空（フォールバック）"
+            "recent_text": "",
+            "reasoning": "文字起こしテキストが空（フォールバック）",
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     
     # 各アジェンダとの類似度を計算
@@ -150,10 +178,10 @@ def _check_deviation_fallback(
     return {
         "is_deviation": is_deviation,
         "confidence": 1.0 - best_similarity,  # 脱線の確信度
-        "similarity": best_similarity,
+        "similarity_score": best_similarity,
         "best_agenda": best_agenda,
         "message": message,
-        "suggestedTopics": suggested_topics,
+        "suggested_agenda": suggested_topics,
         "recent_text": recent_text,
         "reasoning": "従来のJaccard係数ベースの分析（フォールバック）",
         "timestamp": datetime.now(timezone.utc).isoformat()

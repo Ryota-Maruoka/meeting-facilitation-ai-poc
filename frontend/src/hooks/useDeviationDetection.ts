@@ -16,7 +16,7 @@ type UseDeviationDetectionProps = {
 };
 
 type UseDeviationDetectionReturn = {
-  alerts: DeviationAlert[]; // 複数のアラートを管理
+  alerts: DeviationAlert[];
   isCheckingDeviation: boolean;
   consecutiveDeviations: number;
   checkDeviation: () => Promise<void>;
@@ -39,7 +39,7 @@ export const useDeviationDetection = ({
   transcripts,
   isMeetingStarted,
 }: UseDeviationDetectionProps): UseDeviationDetectionReturn => {
-  const [alerts, setAlerts] = useState<DeviationAlert[]>([]); // 複数のアラートを管理
+  const [alerts, setAlerts] = useState<DeviationAlert[]>([]);
   const [isCheckingDeviation, setIsCheckingDeviation] = useState(false);
   const [consecutiveDeviations, setConsecutiveDeviations] = useState(0);
   const [lastCheckedCount, setLastCheckedCount] = useState(0);
@@ -53,16 +53,29 @@ export const useDeviationDetection = ({
       console.log("🔍 脱線検知を実行中...", { meetingId, transcriptCount: transcripts.length });
       const deviationResult = await apiClient.checkDeviation(meetingId);
       
+      // バックエンドレスポンスを詳細にログ出力（デバッグ用）
+      console.log("📥 バックエンドレスポンス:", {
+        is_deviation: deviationResult.is_deviation,
+        similarity: deviationResult.similarity,
+        confidence: deviationResult.confidence,
+        best_agenda: deviationResult.best_agenda,
+        message: deviationResult.message,
+        recent_text: deviationResult.recent_text?.substring(0, 100),
+      });
+      
       // チェック済み数を更新
       setLastCheckedCount(transcripts.length);
       
       if (deviationResult.is_deviation) {
         console.log("⚠️ 脱線を検知:", deviationResult);
-        console.log(`📊 連続脱線回数: ${consecutiveDeviations + 1}回`);
+        console.log(`📊 類似度: ${deviationResult.similarity.toFixed(2)}`);
         console.log(`💬 検知内容: "${deviationResult.recent_text}"`);
+
+/* 
+        // TODO: 脱線検知の頻度が多い場合は、連続脱線回数判定を追加
+        console.log(`📊 連続脱線回数: ${consecutiveDeviations + 1}回`);
         setConsecutiveDeviations(prev => prev + 1);
-        
-        // TODO: 何回以上か検討
+
         // 連続して2回以上脱線が検知された場合のみアラートを追加
         if (consecutiveDeviations >= 1) {
           const newAlert: DeviationAlert = {
@@ -75,6 +88,18 @@ export const useDeviationDetection = ({
         } else {
           console.log("⏳ 連続脱線回数不足（アラートを追加しません）");
         }
+ */
+        // バックエンドで脱線と判定されたら即座にアラートを追加
+        const newAlert: DeviationAlert = {
+          ...deviationResult,
+          id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          timestamp: new Date().toISOString(),
+        };
+        setAlerts(prev => [...prev, newAlert]);
+        console.log("🚨 アラートを追加:", newAlert.id);
+        
+        // 連続脱線カウントは記録のみ
+        setConsecutiveDeviations(prev => prev + 1);
       } else {
         console.log("✅ アジェンダに沿った発話");
         console.log(`💡 類似度: ${deviationResult.similarity.toFixed(2)}`);

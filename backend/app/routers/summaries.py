@@ -128,27 +128,52 @@ async def check_meeting_deviation(meeting_id: str) -> dict:
                 if item.get("title")
             ]
 
+        logger.info("🔍 脱線検知開始: meeting_id=%s", meeting_id)
+        logger.info("📋 アジェンダ項目数: %d", len(agenda_items))
+        for idx, item in enumerate(agenda_items, 1):
+            logger.info("  アジェンダ%d: タイトル=%s, 期待成果物=%s, 所要時間=%d分",
+                       idx, item.get("title", ""), item.get("expectedOutcome", ""), item.get("duration", 0))
+
         if not agenda_items:
             return {
                 "is_deviation": False,
                 "confidence": 0.0,
+                "similarity_score": 0.0,
+                "best_agenda": "",
                 "message": "アジェンダが設定されていません",
                 "suggested_agenda": [],
-                "reasoning": "アジェンダが設定されていないため脱線検知をスキップ"
+                "recent_text": "",
+                "reasoning": "アジェンダが設定されていないため脱線検知をスキップ",
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
-        # 直近の文字起こし結果を取得
-        transcripts = meeting.get("transcripts", [])
+        # 直近の文字起こし結果を取得（transcripts.jsonから読み込む）
+        transcripts = store.load_transcripts(meeting_id)
+        logger.info("📝 文字起こしデータ件数: %d", len(transcripts))
+        
         if not transcripts:
+            logger.warning("⚠️ 文字起こしデータがありません")
             return {
                 "is_deviation": False,
                 "confidence": 0.0,
+                "similarity_score": 0.0,
+                "best_agenda": "",
                 "message": "文字起こしデータがありません",
                 "suggested_agenda": [],
-                "reasoning": "文字起こしデータがないため脱線検知をスキップ"
+                "recent_text": "",
+                "reasoning": "文字起こしデータがないため脱線検知をスキップ",
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
+        # 直近3件の文字起こし内容をログ出力（デバッグ用）
+        recent_count = min(3, len(transcripts))
+        logger.info("📄 直近%d件の文字起こし内容:", recent_count)
+        for i, t in enumerate(transcripts[-recent_count:], 1):
+            text_preview = t.get("text", "")[:100]  # 最初の100文字
+            logger.info("  [%d] %s... (text length: %d)", i, text_preview, len(t.get("text", "")))
+
         # AIベースの脱線検知を実行（アジェンダ項目全体を渡す）
+        logger.info("🤖 AI脱線検知を実行中...")
         deviation_result = await check_realtime_deviation(
             recent_transcripts=transcripts,
             agenda_items=agenda_items,
@@ -156,7 +181,14 @@ async def check_meeting_deviation(meeting_id: str) -> dict:
             consecutive_chunks=3,
         )
 
-        logger.info("AI脱線検知完了 for meeting %s: %s", meeting_id, deviation_result)
+        logger.info("✅ 脱線検知完了: meeting_id=%s", meeting_id)
+        logger.info("📊 判定結果: is_deviation=%s, similarity_score=%.3f, confidence=%.3f",
+                   deviation_result.get("is_deviation"), 
+                   deviation_result.get("similarity_score", 0.0),
+                   deviation_result.get("confidence", 0.0))
+        logger.info("📌 最適アジェンダ: %s", deviation_result.get("best_agenda", ""))
+        logger.info("💬 メッセージ: %s", deviation_result.get("message", ""))
+        logger.info("🔍 判定理由: %s", deviation_result.get("reasoning", "")[:200])  # 最初の200文字
         return deviation_result
 
     except HTTPException:
