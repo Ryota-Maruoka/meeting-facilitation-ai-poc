@@ -138,53 +138,26 @@ class AIDeviationService:
 ## 分析対象の発話
 {recent_text}
 
-## 関連度の計算方法（明示的）
-関連度は以下の要素を総合的に評価して0.0-1.0のスコアで算出します：
+## 関連度計算（合計0.0-1.0）
+1. 意味的関連性: 0.0-0.6（議題・期待成果物との合致度）
+2. キーワード: 0.0-0.2（重要語の一致）
+3. 文脈整合性: 0.0-0.2（会議目的との整合）
 
-1. **意味的関連性（最重要）** (0.0-0.6点)
-   - 発話内容がアジェンダの議題や期待成果物と意味的に合致しているか
-   - 同じトピックや目的を議論しているか
-   - 例：「認証方式」について話している → 認証方式に関する議題と関連度高
+## 判定
+- 関連度 < {threshold} → 脱線
+- 関連度 >= {threshold} → アジェンダに沿っている
 
-2. **キーワードマッチング** (0.0-0.2点)
-   - アジェンダの議題タイトルや期待成果物に含まれる重要なキーワードが発話に含まれているか
-   - ただし、単純なキーワードマッチのみでは判定しない
-
-3. **文脈の整合性** (0.0-0.2点)
-   - 発話内容が会議の目的やアジェンダの流れと整合しているか
-   - 議論が自然に発展しているか
-
-## 判定基準
-- しきい値: {threshold}
-- **関連度が{threshold}未満の場合、脱線と判定**
-- **関連度が{threshold}以上の場合、アジェンダに沿った発話と判定**
-
-## 脱線と判定される具体的な例
-- 完全に無関係な話題（雑談、個人的な話、他の会議の話など）
-- アジェンダの議題や期待成果物と全く関係ない技術的な議論
-- 会議の目的から外れた業務の話
-
-## アジェンダに沿った発話と判定される例
-- アジェンダの議題タイトルや期待成果物に関連する内容を議論している
-- 議題の前提条件や関連情報を説明している
-- 期待成果物を達成するための議論や質問
-
-## 出力形式（JSON）
+## 出力（JSONのみ）
 {{
     "is_deviation": true/false,
     "confidence": 0.0-1.0,
     "similarity_score": 0.0-1.0,
-    "best_agenda": "最も関連性の高いアジェンダの議題タイトル",
-    "reasoning": "関連度の算出根拠と判定理由を具体的に説明（意味的関連性、キーワードマッチ、文脈の整合性それぞれの評価を記載）",
-    "suggested_agenda": ["関連性が高いアジェンダの議題タイトル1", "関連性が高いアジェンダの議題タイトル2"]
+    "best_agenda": "議題タイトル",
+    "reasoning": "簡潔に（3行程度）：各要素のスコアと根拠",
+    "suggested_agenda": ["議題1", "議題2"]
 }}
 
-## 重要な注意事項
-- 関連度は上記3要素（意味的関連性、キーワードマッチング、文脈の整合性）の合計で算出
-- 判定理由には各要素の評価スコアと根拠を明記
-- アジェンダの期待成果物も必ず考慮して判定すること
-
-JSONのみを出力してください。
+期待成果物も考慮してください。JSONのみ出力。
 """
         return prompt
     
@@ -201,14 +174,15 @@ JSONのみを出力してください。
             "messages": [
                 {
                     "role": "system",
-                    "content": "あなたは会議ファシリテーションの専門家です。JSON形式で正確に回答してください。"
+                    "content": "あなたは会議ファシリテーションの専門家です。必ずJSON形式のみで回答してください。JSON以外のテキストは一切出力しないでください。"
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            "max_completion_tokens": 1000
+            "max_completion_tokens": 2000,  # reasoningモデル用に増加（1000→2000）
+            "response_format": {"type": "json_object"}  # JSON出力を強制
         }
         
         logger.info(f"Azure OpenAI API呼び出し: {url}")
@@ -224,7 +198,16 @@ JSONのみを出力してください。
             response.raise_for_status()
             
             result = response.json()
-            return result["choices"][0]["message"]["content"]
+            
+            # レスポンスの内容をデバッグログに出力
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            logger.debug(f"Azure OpenAI APIレスポンス内容: {content[:500]}")  # 最初の500文字をログ出力
+            
+            if not content:
+                logger.error(f"Azure OpenAI APIから空のレスポンス: {result}")
+                raise ValueError("Azure OpenAI APIから空のレスポンスが返されました")
+            
+            return content
     
     def _parse_ai_response(
         self,
@@ -268,7 +251,9 @@ JSONのみを出力してください。
             )
             
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error(f"AIレスポンスのパースエラー: {e}, response: {response}")
+            logger.error(f"AIレスポンスのパースエラー: {e}")
+            logger.error(f"レスポンス内容（最初の500文字）: {response[:500] if response else '(空)'}")
+            logger.error(f"レスポンス長: {len(response) if response else 0}")
             # フォールバック: デフォルト値を返す
             agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
             return DeviationAnalysis(
@@ -279,7 +264,7 @@ JSONのみを出力してください。
                 message="AI分析に失敗しました",
                 suggested_agenda=agenda_titles[:2] if agenda_titles else [],
                 recent_text=recent_text,
-                reasoning="AIレスポンスのパースに失敗",
+                reasoning=f"AIレスポンスのパースに失敗: {str(e)}",
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
     
