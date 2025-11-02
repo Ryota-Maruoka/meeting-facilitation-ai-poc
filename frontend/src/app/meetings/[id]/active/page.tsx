@@ -480,14 +480,14 @@ export default function MeetingActivePage() {
     <div className="page" style={{ height: "100vh", overflow: shouldEnableScroll ? "auto" : "hidden", display: "flex", flexDirection: "column" }}>
       <style suppressHydrationWarning>{commonStyles}</style>
 
-      <div className="page-container" style={{ display: "flex", flexDirection: "column", minHeight: shouldEnableScroll ? undefined : "100%", overflow: "hidden" }}>
+      <div className="page-container" style={{ display: "flex", flexDirection: "column", height: shouldEnableScroll ? undefined : "100%", overflow: "hidden" }}>
         {/* ヘッダー */}
         <div className="meeting-header" style={{ flexShrink: 0 }}>
           <div className="meeting-title">会議中画面</div>
         </div>
 
         {/* ボディコンテンツ */}
-        <div className="body-content" style={{ flex: shouldEnableScroll ? undefined : 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <div className="body-content" style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0, justifyContent: "flex-start" }}>
           {/* 会議情報セクション */}
           <div className="meeting-info-section" style={{ paddingLeft: "24px", paddingRight: "24px", flexShrink: 0 }}>
           <div className="meeting-info" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
@@ -568,7 +568,7 @@ export default function MeetingActivePage() {
               <span className="material-icons icon-sm">{ICONS.TRANSCRIBE}</span>
               <span>文字起こし</span>
             </div>
-            <div className="section-content" style={{ flex: 1, overflow: "hidden", minHeight: 0 }}>
+            <div className="section-content" style={{ flex: 1, overflow: "hidden", minHeight: 0, padding: 0 }}>
               <LiveTranscriptArea
                 ref={transcriptRef}
                 meetingId={meetingId}
@@ -584,7 +584,7 @@ export default function MeetingActivePage() {
               <span className="material-icons icon-sm">{ICONS.ASSIGNMENT}</span>
               <span>要約</span>
             </div>
-            <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+            <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
               {!isRecordingStarted || !isMeetingStarted ? (
                 <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
                   文字起こしが開始されると要約が自動生成されます
@@ -656,7 +656,7 @@ export default function MeetingActivePage() {
                   </button>
                 )}
               </div>
-              <div className="section-content alerts-container" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+              <div className="section-content alerts-container" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
                 {alerts.length > 0 ? (
                   <div className="alerts-list">
                     {alerts.map((alert) => {
@@ -726,7 +726,7 @@ export default function MeetingActivePage() {
                   </span>
                 )}
               </div>
-              <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+              <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
                 {parkingLot.length === 0 ? (
                   <div className="empty-state">{PARKING_LOT_LABEL}は空です</div>
                 ) : (
@@ -746,7 +746,7 @@ export default function MeetingActivePage() {
         </div>
 
         {/* フッターアクション */}
-        <div className="footer-actions" style={{ flexShrink: 0 }}>
+        <div className="footer-actions" style={{ flexShrink: 0, paddingLeft: "15%", paddingRight: "15%", marginTop: "auto" }}>
           <button className="btn" onClick={handleBackToListClick}>
             一覧に戻る
           </button>
