@@ -106,28 +106,24 @@ export const mockTranscripts: Transcript[] = [
     text: "それでは、本日の会議を始めさせていただきます。まず、現状の課題について整理していきましょう。",
     timestamp: "00:00",
     speaker: "田中太郎",
-    confidence: 0.95
   },
   {
     id: "transcript-2", 
     text: "現在、ユーザーからのフィードバックで最も多いのは、ログイン機能の使いにくさですね。",
     timestamp: "00:08",
     speaker: "佐藤花子",
-    confidence: 0.92
   },
   {
     id: "transcript-3",
     text: "確かに、現在のログイン画面は3ステップもあって、ユーザーが離脱してしまう原因になっています。",
     timestamp: "00:15",
-    speaker: "鈴木一郎", 
-    confidence: 0.88
+    speaker: "鈴木一郎",
   },
   {
     id: "transcript-4",
     text: "では、シングルサインオンを導入して、ワンクリックでログインできるようにするのはどうでしょうか？",
     timestamp: "00:22",
     speaker: "高橋美咲",
-    confidence: 0.94
   }
 ];
 

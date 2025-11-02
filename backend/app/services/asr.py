@@ -5,9 +5,136 @@ ASR (Automatic Speech Recognition) サービス
 """
 
 import os
+import re
 import subprocess
 import tempfile
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+import logging
+import numpy as np
+import wave
+
+logger = logging.getLogger(__name__)
+
+
+def _check_audio_quality(audio_file_path: str) -> Tuple[bool, Dict[str, Any]]:
+    """
+    音声ファイルの品質をチェック（無音判定用）
+    
+    Args:
+        audio_file_path: 音声ファイルのパス（WAV形式）
+        
+    Returns:
+        (is_valid, audio_info): 
+        - is_valid: 音声データが有効か（無音でない）
+        - audio_info: 音声情報（file_size, duration, bytes_per_second, rms）
+    """
+    try:
+        # ファイルサイズを取得
+        file_size = os.path.getsize(audio_file_path)
+        
+        # WAVファイルを読み込み
+        with wave.open(audio_file_path, 'rb') as wav_file:
+            sample_rate = wav_file.getframerate()
+            n_frames = wav_file.getnframes()
+            audio_data = wav_file.readframes(n_frames)
+            
+            # 音声の長さ（秒）を計算
+            audio_duration_seconds = n_frames / sample_rate if sample_rate > 0 else 0.0
+            
+            # RMS（音量レベル）を計算
+            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            rms = np.sqrt(np.mean(audio_np ** 2))
+            
+            # 1秒あたりのファイルサイズ（bytes/秒）
+            bytes_per_second = file_size / audio_duration_seconds if audio_duration_seconds > 0 else 0
+            
+            audio_info = {
+                "file_size": file_size,
+                "duration": audio_duration_seconds,
+                "bytes_per_second": bytes_per_second,
+                "rms": rms,
+                "sample_rate": sample_rate,
+            }
+            
+            # 無音判定の閾値
+            MIN_BYTES_PER_SECOND = 0.8 * 1024  # 0.8KB/秒（正常な音声の下限）
+            MIN_RMS_THRESHOLD = 0.015  # RMS < 0.015 はほぼ無音
+            
+            # 無音判定
+            is_valid = (
+                bytes_per_second >= MIN_BYTES_PER_SECOND and 
+                rms >= MIN_RMS_THRESHOLD
+            )
+            
+            logger.info(
+                f">>> 音声品質チェック: "
+                f"ファイルサイズ={file_size} bytes, "
+                f"音声長={audio_duration_seconds:.2f}秒, "
+                f"比率={bytes_per_second:.1f} bytes/秒, "
+                f"RMS={rms:.6f}, "
+                f"有効={'Yes' if is_valid else 'No (無音)'}"
+            )
+            
+            return is_valid, audio_info
+            
+    except Exception as e:
+        logger.warning(f"音声品質チェックエラー: {e}")
+        # エラーの場合は有効として扱う（判定できない場合は後続処理に任せる）
+        return True, {
+            "file_size": 0,
+            "duration": 0.0,
+            "bytes_per_second": 0.0,
+            "rms": 0.0,
+            "sample_rate": 0,
+        }
+
+
+def _filter_hallucination_text(text: str, is_weakly_silence: bool = False) -> str:
+    """
+    幻聴テキストをフィルタリング
+    
+    Args:
+        text: 文字起こし結果テキスト
+        is_weakly_silence: 緩やかな無音判定（Trueの場合、より厳しくフィルタリング）
+        
+    Returns:
+        フィルタリング後のテキスト（幻聴と判定された場合は空文字列）
+    """
+    if not text:
+        return ""
+    
+    # 日本語文字（ひらがな、カタカナ、漢字）の割合をチェック
+    japanese_chars = re.findall(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text)
+    total_chars = len(re.findall(r'[^\s]', text))  # 空白以外の文字数
+    japanese_ratio = len(japanese_chars) / total_chars if total_chars > 0 else 0
+    
+    logger.info(
+        f">>> テキスト品質チェック: "
+        f"日本語文字数={len(japanese_chars)}, "
+        f"総文字数={total_chars}, "
+        f"日本語割合={japanese_ratio:.2%}"
+    )
+    
+    # 日本語の割合が20%未満の場合は除外（明らかに日本語ではない）
+    if total_chars > 5 and japanese_ratio < 0.2:
+        logger.info(f">>> 日本語の割合が低すぎます（{japanese_ratio:.2%} < 20%）、無視します")
+        return ""
+    
+    # 明らかに不正なパターンのみ検出（最小限）
+    hallucination_patterns = [
+        r'ご視聴.*?ありがとう',
+        r'Thanks?\s+for\s+watching',
+        r'让我们来看看',
+        r'視聴.*?感謝',
+        r'ご.*?視聴.*?ございました',
+    ]
+    
+    for pattern in hallucination_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            logger.info(f">>> 幻聴パターンを検出 ({pattern}), 無視します: {text[:100]}")
+            return ""
+    
+    return text
 
 
 def convert_webm_to_wav(webm_data: bytes) -> bytes:
@@ -123,11 +250,6 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
         logger.error(f"音声変換エラー: {e}")
         raise RuntimeError(f"Failed to convert WebM to WAV: {e}")
 
-
-# Whisper.cpp関連の関数は削除済み
-# Python版Whisperのみを使用
-
-
 # グローバル変数でWhisperモデルをキャッシュ
 _whisper_model = None
 _whisper_model_lock = None
@@ -156,39 +278,42 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
         文字起こし結果
     """
     try:
-        import logging
-        logger = logging.getLogger(__name__)
+        import torch
 
         print(">>> Python版Whisperで文字起こし中...")
-        logger.info(">>> Python版Whisperで文字起こし中...")
+        logger.info(">>> Python版Whisperで文字起こしを実行")
 
-        import torch
-        import numpy as np
-        import wave
+        # 音声品質チェック（無音判定）
+        is_valid, audio_info = _check_audio_quality(audio_file_path)
+        
+        if not is_valid:
+            logger.info(">>> 音声データが無音と判定されました（Python Whisperに送信せずスキップ）")
+            return {
+                "text": "",
+                "language": "ja",
+            }
 
         # キャッシュされたモデルを取得
         model = _get_whisper_model()
 
-        # WAVファイルを直接NumPy配列として読み込み（ffmpegを使わない）
+        # WAVファイルを直接NumPy配列として読み込み
+        import numpy as np
+        import wave
+
         with wave.open(audio_file_path, 'rb') as wav_file:
-            # WAVファイルのパラメータを取得
             sample_rate = wav_file.getframerate()
             n_frames = wav_file.getnframes()
             audio_data = wav_file.readframes(n_frames)
-
-            # バイトデータをNumPy配列に変換
             audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
-            print(f">>> 音声データ読み込み完了: {len(audio_np)} samples, {sample_rate}Hz")
-
         # 音声ファイルを文字起こし
-        print(f">>> Whisper実行開始（音声長: {len(audio_np)/16000:.2f}秒）")
+        print(f">>> Whisper実行開始（音声長: {audio_info['duration']:.2f}秒）")
         try:
             result = model.transcribe(
-                audio_np,  # NumPy配列を直接渡す
-                language="ja",  # 日本語
+                audio_np,
+                language="ja",
                 fp16=False,  # Windows CPU環境ではfp16を無効化
-                verbose=False,  # 詳細ログを抑制
+                verbose=False,
             )
             print(">>> Whisper実行完了")
         except Exception as e:
@@ -196,9 +321,21 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
             raise
 
         text = result["text"].strip()
-
-        print(f">>> Whisper文字起こし結果: {text[:200] if text else '(empty)'}")
-        logger.info(f">>> Whisper文字起こし結果: {text[:200] if text else '(empty)'}")
+        
+        # テキストの幻聴フィルタリング
+        # 緩やかな無音判定（bytes/秒またはRMSが低めの場合）
+        is_weakly_silence = (
+            audio_info["bytes_per_second"] < 1.0 * 1024 or 
+            audio_info["rms"] < 0.02
+        )
+        
+        filtered_text = _filter_hallucination_text(
+            text,
+            is_weakly_silence=is_weakly_silence
+        )
+        
+        print(f">>> Whisper文字起こし結果: {filtered_text[:200] if filtered_text else '(empty)'}")
+        logger.info(f">>> Whisper文字起こし結果: {filtered_text[:200] if filtered_text else '(empty)'}")
 
         # メモリを解放
         import gc
@@ -213,9 +350,8 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
         print(">>> メモリ解放完了")
 
         return {
-            "text": text,
-            "confidence": 0.95,
-            "language": "ja"
+            "text": filtered_text,
+            "language": "ja",
         }
 
     except ImportError as e:
@@ -274,8 +410,40 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
 
                     print(f">>> WAV変換完了: {processed_audio_path}")
 
-                result = await transcribe_with_azure_whisper(processed_audio_path)
+                # 音声品質チェック（無音判定）
+                is_valid, audio_info = _check_audio_quality(processed_audio_path)
+                
+                if not is_valid:
+                    logger.info(">>> 音声データが無音と判定されました（Azure Whisperに送信せずスキップ）")
+                    # 一時ファイルをクリーンアップ
+                    if temp_wav_path and os.path.exists(temp_wav_path):
+                        try:
+                            os.unlink(temp_wav_path)
+                        except Exception:
+                            pass
+                    return {
+                        "text": "",
+                        "language": "ja",
+                    }
 
+                # Azure Whisperで文字起こし実行
+                result = await transcribe_with_azure_whisper(processed_audio_path)
+                
+                # テキストの幻聴フィルタリング
+                # 緩やかな無音判定（bytes/秒またはRMSが低めの場合）
+                is_weakly_silence = (
+                    audio_info["bytes_per_second"] < 1.0 * 1024 or 
+                    audio_info["rms"] < 0.02
+                )
+                
+                filtered_text = _filter_hallucination_text(
+                    result.get("text", ""), 
+                    is_weakly_silence=is_weakly_silence
+                )
+                
+                # フィルタリング後のテキストを反映
+                result["text"] = filtered_text
+                
                 # 一時ファイルをクリーンアップ
                 if temp_wav_path and os.path.exists(temp_wav_path):
                     try:
@@ -321,6 +489,7 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
 
                     print(f">>> WAV変換完了: {processed_audio_path}")
 
+                # Python Whisperで文字起こし実行（Azure Whisperと同じロジック）
                 result = await transcribe_with_python_whisper(processed_audio_path)
 
                 # 一時ファイルをクリーンアップ

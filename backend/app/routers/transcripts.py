@@ -171,8 +171,14 @@ async def transcribe_audio_upload(
             result = await transcribe_audio_file(temp_file_path)
 
             logger.info("=== 文字起こし完了 ===")
-            print(f"=== 文字起こし完了: {result} ===")
-            logger.info("Transcription completed: %s", result)
+            
+            # ログ出力
+            log_data = {
+                "text": result.get("text", "")[:100] if result.get("text") else "",
+                "language": result.get("language"),
+            }
+            print(f"=== 文字起こし完了: {log_data} ===")
+            logger.info("=== 文字起こし完了: %s ===", log_data)
 
             # 文字起こし結果にIDとタイムスタンプを追加
             current_timestamp = datetime.now(timezone.utc).isoformat()
@@ -180,7 +186,6 @@ async def transcribe_audio_upload(
                 "id": str(uuid4()),
                 "timestamp": current_timestamp,
                 "text": result.get("text", ""),
-                "confidence": result.get("confidence", 0.0),
                 "language": result.get("language", "ja"),
             }
 

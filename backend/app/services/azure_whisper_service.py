@@ -75,7 +75,7 @@ async def transcribe_with_azure_whisper(audio_file_path: str) -> Dict[str, Any]:
                 "temperature": (None, str(settings.asr_temperature)),
             }
             
-            # API呼び出し（タイムアウトを延長）
+            # API呼び出し
             async with httpx.AsyncClient(timeout=300.0) as client:
                 response = await client.post(
                     url,
@@ -126,7 +126,7 @@ async def transcribe_with_azure_whisper(audio_file_path: str) -> Dict[str, Any]:
             "language": result.get("language", settings.asr_language),
             "duration": duration,
             "segments": segments,
-            "processing_time": processing_time,  # 処理時間を追加
+            "processing_time": processing_time,
         }
         
     except httpx.HTTPStatusError as e:
@@ -185,7 +185,7 @@ async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str =
             "temperature": (None, str(settings.asr_temperature)),
         }
         
-        # API呼び出し（タイムアウトを延長）
+        # API呼び出し
         async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 url,
@@ -231,7 +231,7 @@ async def transcribe_audio_data_azure_whisper(audio_data: bytes, filename: str =
             "language": result.get("language", settings.asr_language),
             "duration": duration,
             "segments": segments,
-            "processing_time": processing_time,  # 処理時間を追加
+            "processing_time": processing_time,
         }
         
     except httpx.HTTPStatusError as e:
