@@ -39,6 +39,7 @@ import { ICONS, SUMMARY_PAGE_TITLE, DOWNLOAD_FORMAT_LABELS } from "@/lib/constan
 import Toast from "@/shared/components/Toast";
 import { useToast } from "@/shared/hooks/useToast";
 import { apiClient } from "@/lib/api";
+import { formatElapsedHMSFromIso } from "@/lib/time";
 
 export default function MeetingSummaryPage() {
   const params = useParams();
@@ -133,6 +134,8 @@ export default function MeetingSummaryPage() {
           actualStartTime = `${hours}:${minutes}`;
         }
 
+        const firstIso = Array.isArray(transcripts) && transcripts.length > 0 ? transcripts[0].timestamp : undefined;
+
         setSummaryData({
           ...basicInfo,
           duration: actualDuration,
@@ -149,7 +152,7 @@ export default function MeetingSummaryPage() {
           parkingLot: (parkingItems || []).map((p: any) => p.title).filter((t: string) => !!t),
           transcripts: transcripts.map((t: any) => ({
             text: t.text,
-            timestamp: t.timestamp,
+            timestamp: formatElapsedHMSFromIso(firstIso, t.timestamp),
           })),
         });
       } catch (error) {

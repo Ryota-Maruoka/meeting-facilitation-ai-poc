@@ -248,15 +248,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
         # 設定を確認
         from ..settings import settings
         
-        # スタブ実装の場合はスタブデータを返す
-        if settings.asr_provider == "stub":
-            logger.info("スタブ実装を使用して文字起こしを実行")
-            return {
-                "text": "こんにちは、会議の文字起こしテストです。音声認識が正常に動作しています。",
-                "confidence": 0.95,
-                "language": "ja"
-            }
-
         # Azure OpenAI Whisperを使用する場合
         if settings.asr_provider == "azure_whisper":
             logger.info("Azure OpenAI Whisper APIを使用して文字起こしを実行")
@@ -353,28 +344,15 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 # Python版Whisperが失敗した場合はエラーを返す
                 print(f">>> Python版Whisperが失敗: {e}")
                 logger.error(f"Python版Whisperが失敗: {e}")
-                
-                return {
-                    "text": f"[エラー] Python版Whisperでの音声認識に失敗しました: {str(e)}",
-                    "confidence": 0.0,
-                    "language": "ja"
-                }
+                raise RuntimeError(f"音声認識に失敗しました: {str(e)}")
         
-        # asr_providerが"whisper_python"以外の場合
+        # asr_providerが未対応の場合
         logger.error(f"未対応のASRプロバイダー: {settings.asr_provider}")
-        return {
-            "text": f"[エラー] 未対応のASRプロバイダー: {settings.asr_provider}",
-            "confidence": 0.0,
-            "language": "ja"
-        }
+        raise ValueError(f"未対応のASRプロバイダー: {settings.asr_provider}")
         
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"ASR error: {e}", exc_info=True)
-        
-        return {
-            "text": f"[エラー] 音声認識に失敗しました: {str(e)}",
-            "confidence": 0.0,
-            "language": "ja"
-        }
+        # エラーを上位に伝播
+        raise

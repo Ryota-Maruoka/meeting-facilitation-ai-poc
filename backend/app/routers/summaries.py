@@ -115,14 +115,20 @@ async def check_meeting_deviation(meeting_id: str) -> dict:
         if not meeting:
             raise HTTPException(404, "Meeting not found")
 
-        # アジェンダタイトルを取得
-        agenda_titles = []
+        # アジェンダ項目を取得（タイトル、期待成果物を含む）
+        agenda_items = []
         if "agenda" in meeting and meeting["agenda"]:
-            agenda_titles = [
-                item.get("title", "") for item in meeting["agenda"] if item.get("title")
+            agenda_items = [
+                {
+                    "title": item.get("title", ""),
+                    "expectedOutcome": item.get("expectedOutcome", ""),
+                    "duration": item.get("duration", 0),
+                }
+                for item in meeting["agenda"]
+                if item.get("title")
             ]
 
-        if not agenda_titles:
+        if not agenda_items:
             return {
                 "is_deviation": False,
                 "confidence": 0.0,
@@ -142,10 +148,10 @@ async def check_meeting_deviation(meeting_id: str) -> dict:
                 "reasoning": "文字起こしデータがないため脱線検知をスキップ"
             }
 
-        # AIベースの脱線検知を実行
+        # AIベースの脱線検知を実行（アジェンダ項目全体を渡す）
         deviation_result = await check_realtime_deviation(
             recent_transcripts=transcripts,
-            agenda_titles=agenda_titles,
+            agenda_items=agenda_items,
             threshold=0.3,
             consecutive_chunks=3,
         )
