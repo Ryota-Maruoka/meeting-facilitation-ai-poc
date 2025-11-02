@@ -174,36 +174,67 @@ python run.py summarize-meeting --help
 ```
 backend/
 ├── app/
-│   ├── main.py                    # FastAPIアプリケーション
-│   ├── settings.py                # 設定管理
-│   ├── storage.py                 # データストア
-│   ├── core/
-│   │   └── exceptions.py          # カスタム例外
-│   ├── services/
-│   │   ├── asr.py                 # 音声文字起こし
-│   │   ├── deviation.py           # 脱線検知
-│   │   ├── llm.py                 # LLMサービス
-│   │   └── slack.py               # Slack連携
-│   └── meeting_summarizer/        # 🆕 会議要約モジュール
-│       ├── __init__.py
-│       ├── schema.py              # 出力スキーマ定義
-│       ├── preprocess.py          # ASR前処理
-│       ├── service.py             # メインロジック
-│       ├── presenter.py           # 出力整形
-│       └── cli.py                 # CLIコマンド
-├── data/                          # 会議データ保存先
-│   ├── meetings/                  # 会議データ（UUID形式）
-│   ├── summaries/                 # 要約データ（CLI出力）
-│   └── test/                      # テストデータ
-├── run.py                         # エントリーポイント
-├── requirements.txt               # Python依存関係
-├── env.example                    # 環境変数サンプル
-├── sample_transcript.txt          # サンプルASRテキスト
-├── setup_free_asr.py              # 無料ASR自動セットアップスクリプト
-├── README.md                      # このファイル
-├── MEETING_SUMMARY_GUIDE.md       # 会議要約機能の詳細ガイド
-├── ASR_SETUP.md                   # ASRセットアップガイド
-└── FREE_ASR_GUIDE.md              # 無料ASR実装ガイド
+│   ├── main.py                    # FastAPIアプリケーションエントリーポイント
+│   ├── settings.py                # 設定管理（pydantic-settings）
+│   ├── storage.py                 # JSONファイルを扱う軽量データストア
+│   │
+│   ├── schemas/                   # Pydanticモデル（データ構造定義）
+│   │   ├── __init__.py
+│   │   ├── meeting.py             # Meeting, MeetingCreate, AgendaItem
+│   │   ├── transcript.py           # TranscriptChunk（文字起こし結果）
+│   │   ├── summary.py             # MiniSummary, Decision, ActionItem
+│   │   ├── parking.py             # ParkingItem
+│   │   └── slack.py               # SlackPayload
+│   │
+│   ├── routers/                    # APIルーター（機能別エンドポイント）
+│   │   ├── __init__.py
+│   │   ├── meetings.py            # 会議CRUD（作成・取得・更新）
+│   │   ├── transcripts.py         # 音声文字起こし（Whisper連携）
+│   │   ├── summaries.py            # 要約・分析・脱線検知
+│   │   ├── decisions.py            # 決定事項・アクション項目
+│   │   ├── parking.py             # Parking Lot（後回し項目管理）
+│   │   └── slack.py                # Slack通知・連携処理
+│   │
+│   ├── services/                   # 各種業務ロジック
+│   │   ├── __init__.py
+│   │   ├── asr.py                  # 音声認識サービス（Azure Whisper / Python Whisper）
+│   │   ├── azure_whisper_service.py # Azure OpenAI Whisper API連携
+│   │   ├── deviation.py            # 脱線検知サービス（従来手法：Jaccard係数）
+│   │   ├── ai_deviation.py         # AI脱線検知サービス（LLM使用）
+│   │   ├── llm.py                  # LLM（GPT）要約・未決事項抽出・提案生成
+│   │   ├── meeting_scheduler.py    # 会議中の自動要約生成スケジューラー
+│   │   └── slack.py                # Slack API連携
+│   │
+│   ├── meeting_summarizer/         # 🆕 会議要約生成モジュール
+│   │   ├── __init__.py
+│   │   ├── service.py              # メインロジック（Azure AI Foundry Responses API使用）
+│   │   ├── preprocess.py           # ASR前処理（フィラー削除、チャンク分割）
+│   │   ├── presenter.py            # 出力整形（JSON/Markdown）
+│   │   ├── schema.py               # 出力スキーマ定義（Pydanticモデル）
+│   │   └── cli.py                   # CLIコマンド（typer使用）
+│   │
+│   ├── core/                       # 共通ユーティリティ
+│   │   ├── __init__.py
+│   │   └── exceptions.py           # カスタム例外定義
+│   │
+│   └── data/                       # データディレクトリ（実行時に生成）
+│       └── meetings/               # 会議データ（会議ID毎にディレクトリ）
+│           └── {meeting_id}/
+│               ├── meeting.json   # 会議メタデータ
+│               ├── transcripts.json # 文字起こしデータ
+│               ├── summary.json    # 要約データ（API生成）
+│               └── audio.wav      # 録音ファイル（オプション）
+│
+├── run.py                          # エントリーポイント（typerベースCLI）
+├── requirements.txt                # Python依存関係
+├── pyproject.toml                  # Linter設定（ruff, mypy）
+├── env.example                     # 環境変数サンプル
+├── sample_transcript.txt           # サンプルASRテキスト（会議要約CLI用）
+├── setup_free_asr.py               # 無料ASR自動セットアップスクリプト
+├── README.md                       # このファイル
+├── MEETING_SUMMARY_GUIDE.md        # 会議要約機能の詳細ガイド
+├── ASR_SETUP.md                    # ASRセットアップガイド
+└── FREE_ASR_GUIDE.md               # 無料ASR実装ガイド
 ```
 
 ## 🛠️ 開発

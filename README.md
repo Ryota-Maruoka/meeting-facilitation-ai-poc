@@ -25,6 +25,8 @@ meeting-facilitation-ai-poc/
 ├── backend/                                # FastAPI バックエンド
 │   ├── app/
 │   │   ├── main.py                         # エントリーポイント（FastAPI起動）
+│   │   ├── settings.py                     # 設定管理（pydantic-settings）
+│   │   ├── storage.py                      # JSONファイルを扱う軽量データストア
 │   │   │
 │   │   ├── schemas/                        # Pydanticモデル（データ構造定義）
 │   │   │   ├── __init__.py
@@ -44,26 +46,30 @@ meeting-facilitation-ai-poc/
 │   │   │   └── slack.py                    # Slack通知・連携処理
 │   │   │
 │   │   ├── services/                       # 各種業務ロジック
-│   │   │   ├── asr_service.py              # Whisper.cpp / OpenAI Whisper 呼び出し
-│   │   │   ├── llm_service.py              # LLM（GPT）要約・脱線検知
-│   │   │   ├── slack_service.py            # Slack API連携
-│   │   │   └── parking_service.py          # Parking管理ロジック
+│   │   │   ├── asr.py                      # 音声認識サービス（Azure Whisper / Python Whisper）
+│   │   │   ├── azure_whisper_service.py    # Azure OpenAI Whisper API連携
+│   │   │   ├── deviation.py                # 脱線検知サービス（従来手法）
+│   │   │   ├── ai_deviation.py             # AI脱線検知サービス（LLM使用）
+│   │   │   ├── llm.py                      # LLM（GPT）要約・未決事項抽出・提案生成
+│   │   │   ├── meeting_scheduler.py         # 会議中の自動要約生成スケジューラー
+│   │   │   └── slack.py                     # Slack API連携
 │   │   │
-│   │   ├── core/                           # 共通ユーティリティ（設定・ログ等）
-│   │   │   ├── config.py
-│   │   │   ├── logger.py
-│   │   │   └── utils.py
+│   │   ├── meeting_summarizer/             # 会議要約生成モジュール
+│   │   │   ├── service.py                  # 要約生成ロジック
+│   │   │   ├── preprocess.py              # 前処理
+│   │   │   ├── presenter.py               # 結果整形
+│   │   │   ├── schema.py                  # 要約データ構造
+│   │   │   └── cli.py                     # CLIインターフェース
 │   │   │
-│   │   └── storage.py                      # JSONファイルを扱う軽量データストア
-│   │
-│   ├── whisper-cpp/                        # Whisper.cpp バイナリとモデル
-│   │   ├── main.exe                        # Whisper実行ファイル
-│   │   └── models/
-│   │       └── ggml-base.bin               # Whisperモデル
+│   │   ├── core/                           # 共通ユーティリティ
+│   │   │   ├── __init__.py
+│   │   │   └── exceptions.py               # カスタム例外定義
+│   │   │
+│   │   └── data/                           # データディレクトリ
+│   │       └── meetings/                   # 会議データ（JSONファイル）
 │   │
 │   ├── requirements.txt                    # Python依存パッケージ
-│   ├── run.py                              # ローカル実行スクリプト
-│   └── .gitignore                          # Whisperモデル・音声ファイル除外
+│   └── run.py                              # ローカル実行スクリプト
 │
 └── frontend/                               # Next.js フロントエンド（App Router）
     └── src/
@@ -71,36 +77,55 @@ meeting-facilitation-ai-poc/
         │   ├── page.tsx                    # トップページ: 会議履歴一覧
         │   ├── layout.tsx                  # ルートレイアウト
         │   ├── globals.css                 # グローバルスタイル
-        │   └── meetings/                   # 会議関連ルート
-        │       ├── new/
-        │       │   └── page.tsx            # 新規会議作成画面
-        │       └── [id]/                   # 動的ルート（会議ID）
-        │           ├── active/
-        │           │   └── page.tsx        # 会議進行中画面
-        │           └── summary/
-        │               └── page.tsx        # 会議レポート画面
+        │   ├── history/
+        │   │   └── page.tsx                # 履歴ページ（トップへリダイレクト）
+        │   ├── meetings/                   # 会議関連ルート
+        │   │   ├── new/
+        │   │   │   └── page.tsx            # 新規会議作成画面
+        │   │   └── [id]/                   # 動的ルート（会議ID）
+        │   │       ├── active/
+        │   │       │   └── page.tsx        # 会議進行中画面
+        │   │       └── summary/
+        │   │           └── page.tsx        # 会議レポート画面
+        │   └── api/                        # Next.js APIルート
+        │       ├── health/
+        │       │   └── route.ts             # ヘルスチェック
+        │       └── meetings/
+        │           ├── route.ts             # 会議一覧・作成API
+        │           └── [id]/
+        │               └── route.ts         # 会議詳細・更新・削除API
         │
-        ├── features/                       # 機能別ディレクトリ（推奨パターン）
-        │   ├── meeting-history/            # 会議履歴機能
-        │   │   ├── components/
-        │   │   │   └── MeetingHistoryList.tsx
-        │   │   └── hooks/
-        │   ├── meeting-active/             # 会議進行中機能
-        │   │   ├── components/
-        │   │   └── hooks/
-        │   ├── meeting-creation/           # 会議作成機能
-        │   │   └── components/
-        │   └── meeting-summary/            # 会議レポート機能
-        │       └── components/
+        ├── components/                     # コンポーネント
+        │   ├── providers/                  # プロバイダーコンポーネント
+        │   │   ├── ThemeProvider.tsx       # MUIテーマプロバイダー
+        │   │   └── index.tsx
+        │   └── sections/                   # セクションコンポーネント
+        │       ├── DeviationAlert/          # 脱線アラート表示
+        │       │   ├── DeviationAlert.tsx
+        │       │   └── index.tsx
+        │       └── LiveTranscriptArea/     # ライブ文字起こし表示
+        │           ├── LiveTranscriptArea.tsx
+        │           └── index.tsx
+        │
+        ├── hooks/                          # カスタムフック
+        │   ├── useMeetings.ts              # 会議一覧取得フック
+        │   ├── useMeeting.ts               # 会議詳細取得フック
+        │   └── useDeviationDetection.ts    # 脱線検知フック
+        │
+        ├── lib/                            # ユーティリティ・型定義
+        │   ├── types.ts                    # TypeScript型定義
+        │   ├── api.ts                      # API クライアント
+        │   ├── constants.ts                # 定数定義
+        │   ├── time.ts                     # 時刻フォーマット関数
+        │   └── meetingStorage.ts           # 会議データストレージ（API連携）
         │
         ├── shared/                         # 共通リソース
         │   ├── components/                 # 共通UIコンポーネント
-        │   ├── hooks/                      # カスタムフック
-        │   └── lib/                        # ユーティリティ・型定義
-        │       ├── types.ts                # TypeScript型定義
-        │       ├── utils.ts                # ヘルパー関数
-        │       ├── constants.ts            # 定数定義
-        │       └── api.ts                  # API クライアント
+        │   │   └── Toast.tsx               # トースト通知コンポーネント
+        │   ├── hooks/                      # 共通カスタムフック
+        │   │   └── useToast.ts             # トースト通知フック
+        │   └── lib/                        # 共通ユーティリティ
+        │       └── utils.ts                # ヘルパー関数（formatDate等）
         │
         └── styles/                         # スタイルファイル
             ├── commonStyles.ts             # 共通スタイル定義
@@ -110,21 +135,33 @@ meeting-facilitation-ai-poc/
 ### フロントエンド構造の特徴
 
 #### 1. App Router パターン
-- Next.js 13+のApp Routerを採用
+- Next.js 14+のApp Routerを採用
 - `app/`ディレクトリ内の`page.tsx`が各ルートのページコンポーネント
-- ファイル名は固定（`page.tsx`, `layout.tsx`など）
+- ファイル名は固定（`page.tsx`, `layout.tsx`, `route.ts`など）
+- `app/api/`配下でNext.js APIルートを提供（バックエンドAPIのプロキシとして機能）
 
-#### 2. 機能別ディレクトリ（Features）
-- 各機能を`features/`配下に独立したモジュールとして配置
-- 機能ごとにコンポーネント、フック、ユーティリティを集約
-- スケーラブルで保守性の高い構造
+#### 2. コンポーネント構造
+- `components/providers/` - プロバイダーコンポーネント（テーマ等）
+- `components/sections/` - セクションレベルコンポーネント（脱線アラート、ライブ文字起こし等）
+- 各コンポーネントは`index.tsx`でエクスポートし、ディレクトリ単位で管理
 
-#### 3. 共有リソース（Shared）
-- アプリ全体で使用する共通要素を`shared/`に配置
-- 型定義、ユーティリティ関数、共通コンポーネントなど
-- 機能横断的な再利用可能なコード
+#### 3. カスタムフック
+- `hooks/`配下に機能別のカスタムフックを配置
+- `useMeetings`, `useMeeting`, `useDeviationDetection`など
+- データ取得ロジックとUIロジックを分離
 
-#### 4. わかりやすいページコメント
+#### 4. 共有リソース（Shared）
+- `shared/components/` - 共通UIコンポーネント（Toast通知等）
+- `shared/hooks/` - 共通カスタムフック（useToast等）
+- `shared/lib/` - 共通ユーティリティ関数
+- 機能横断的な再利用可能なコードを集約
+
+#### 5. 型定義とAPIクライアント
+- `lib/types.ts` - アプリ全体で使用する型定義を一元管理
+- `lib/api.ts` - バックエンドAPIとの通信を統一管理
+- `lib/time.ts` - 時刻フォーマット関数を集約
+
+#### 6. わかりやすいページコメント
 - 各`page.tsx`の冒頭に詳細なコメントを記載
 - URL、機能、関連ファイルを明記
 - 何のファイルか一目で判別可能
