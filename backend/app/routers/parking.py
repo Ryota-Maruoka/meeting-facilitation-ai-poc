@@ -35,9 +35,13 @@ async def add_parking(meeting_id: str, item: ParkingItem) -> dict:
     if not meeting:
         raise HTTPException(404, "Meeting not found")
     
+    # 既存のparkingフィールドを保護（他のリクエストとの競合を防ぐため、最新データを再読み込み）
     # parkingフィールドが存在しない場合は初期化
     if "parking" not in meeting:
         meeting["parking"] = []
+    
+    # 既存のparkingアイテムを取得（念のため最新の会議データから再確認）
+    existing_parking = meeting.get("parking", []).copy()
     
     # タイトルをAIで自動生成（contentから生成）
     if item.content:
@@ -46,9 +50,14 @@ async def add_parking(meeting_id: str, item: ParkingItem) -> dict:
         logger.info(f"🤖 AI生成されたtitle: {title}")
         item.title = title
     
-    meeting["parking"].append(item.model_dump())
+    # 既存のparkingアイテムに新しいアイテムを追加
+    new_parking = existing_parking + [item.model_dump()]
+    meeting["parking"] = new_parking
+    
+    logger.info(f"📝 保留事項追加: 既存={len(existing_parking)}件, 追加後={len(new_parking)}件")
+    
     store.save_meeting(meeting_id, meeting)
-    return {"ok": True, "count": len(meeting["parking"])}
+    return {"ok": True, "count": len(new_parking)}
 
 
 @router.get("/parking")
