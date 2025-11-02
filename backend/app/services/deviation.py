@@ -38,7 +38,7 @@ def check_deviation(text: str, agenda_titles: List[str], threshold: float = 0.3)
 
 async def check_realtime_deviation(
     recent_transcripts: List[Dict[str, Any]], 
-    agenda_titles: List[str], 
+    agenda_items: List[Dict[str, Any]], 
     threshold: float = 0.3,
     consecutive_chunks: int = 3
 ) -> Dict[str, Any]:
@@ -47,7 +47,7 @@ async def check_realtime_deviation(
     
     Args:
         recent_transcripts: 直近の文字起こし結果のリスト
-        agenda_titles: アジェンダタイトルのリスト
+        agenda_items: アジェンダ項目のリスト（タイトル、期待成果物を含む）
         threshold: 類似度のしきい値
         consecutive_chunks: 連続して脱線と判定するチャンク数
         
@@ -58,7 +58,7 @@ async def check_realtime_deviation(
         # AIベースの脱線検知を実行
         analysis = await ai_deviation_service.check_deviation(
             recent_transcripts=recent_transcripts,
-            agenda_titles=agenda_titles,
+            agenda_items=agenda_items,
             threshold=threshold,
             consecutive_chunks=consecutive_chunks
         )
@@ -80,6 +80,7 @@ async def check_realtime_deviation(
         logger.error(f"AI脱線検知エラー: {e}", exc_info=True)
         
         # フォールバック: 従来の手法を使用
+        agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
         return _check_deviation_fallback(recent_transcripts, agenda_titles, threshold, consecutive_chunks)
 
 

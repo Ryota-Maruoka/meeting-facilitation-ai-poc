@@ -48,7 +48,7 @@ class AIDeviationService:
     async def check_deviation(
         self,
         recent_transcripts: List[Dict[str, Any]],
-        agenda_titles: List[str],
+        agenda_items: List[Dict[str, Any]],
         threshold: float = 0.3,
         consecutive_chunks: int = 3
     ) -> DeviationAnalysis:
@@ -57,7 +57,7 @@ class AIDeviationService:
         
         Args:
             recent_transcripts: 直近の文字起こし結果のリスト
-            agenda_titles: アジェンダタイトルのリスト
+            agenda_items: アジェンダ項目のリスト（タイトル、期待成果物を含む）
             threshold: 脱線判定のしきい値
             consecutive_chunks: 連続して脱線と判定するチャンク数
             
@@ -78,7 +78,7 @@ class AIDeviationService:
                 return self._create_no_text_result()
             
             # Azure OpenAI APIでAI脱線検知を実行
-            return await self._check_deviation_ai(recent_text, agenda_titles, threshold)
+            return await self._check_deviation_ai(recent_text, agenda_items, threshold)
             
         except Exception as e:
             logger.error(f"脱線検知エラー: {e}", exc_info=True)
@@ -87,20 +87,20 @@ class AIDeviationService:
     async def _check_deviation_ai(
         self,
         recent_text: str,
-        agenda_titles: List[str],
+        agenda_items: List[Dict[str, Any]],
         threshold: float
     ) -> DeviationAnalysis:
         """AIベースの脱線検知（Azure OpenAI使用）"""
         
         # プロンプトを構築
-        prompt = self._build_deviation_prompt(recent_text, agenda_titles, threshold)
+        prompt = self._build_deviation_prompt(recent_text, agenda_items, threshold)
         
         try:
             # Azure OpenAI APIを呼び出し
             response = await self._call_azure_openai(prompt)
             
             # レスポンスをパース
-            analysis = self._parse_ai_response(response, recent_text, agenda_titles)
+            analysis = self._parse_ai_response(response, recent_text, agenda_items)
             
             logger.info(f"AI脱線検知完了: is_deviation={analysis.is_deviation}, confidence={analysis.confidence}")
             return analysis
@@ -109,41 +109,80 @@ class AIDeviationService:
             logger.error(f"Azure OpenAI API呼び出しエラー: {e}")
             raise  # エラーを上位に伝播
     
-    def _build_deviation_prompt(self, recent_text: str, agenda_titles: List[str], threshold: float) -> str:
+    def _build_deviation_prompt(self, recent_text: str, agenda_items: List[Dict[str, Any]], threshold: float) -> str:
         """脱線検知用のプロンプトを構築"""
         
-        agenda_list = "\n".join([f"- {title}" for title in agenda_titles])
+        # アジェンダ項目を詳細に記述（タイトル + 期待成果物）
+        agenda_list = []
+        for idx, item in enumerate(agenda_items, 1):
+            title = item.get("title", "")
+            expected_outcome = item.get("expectedOutcome", "")
+            duration = item.get("duration", 0)
+            
+            agenda_str = f"{idx}. 【議題】{title}"
+            if expected_outcome:
+                agenda_str += f"\n    【期待成果物】{expected_outcome}"
+            if duration:
+                agenda_str += f"\n    【所要時間】{duration}分"
+            
+            agenda_list.append(agenda_str)
+        
+        agenda_text = "\n\n".join(agenda_list)
         
         prompt = f"""
-あなたは会議ファシリテーションの専門家です。以下の会議の発話内容が、設定されたアジェンダから脱線しているかを分析してください。
+あなたは会議ファシリテーションの専門家です。以下の会議の発話内容が、設定されたアジェンダ（議題と期待成果物）から脱線しているかを厳密に分析してください。
 
-## アジェンダ
-{agenda_list}
+## アジェンダ（議題と期待成果物）
+{agenda_text}
 
 ## 分析対象の発話
 {recent_text}
 
-## 分析要件
-1. 発話内容がアジェンダのいずれかと関連しているかを判定
-2. 関連度を0.0-1.0のスコアで評価（1.0=完全に関連、0.0=全く無関係）
-3. 脱線している場合は、最も関連性の高いアジェンダを特定
-4. 脱線の理由を簡潔に説明
+## 関連度の計算方法（明示的）
+関連度は以下の要素を総合的に評価して0.0-1.0のスコアで算出します：
+
+1. **意味的関連性（最重要）** (0.0-0.6点)
+   - 発話内容がアジェンダの議題や期待成果物と意味的に合致しているか
+   - 同じトピックや目的を議論しているか
+   - 例：「認証方式」について話している → 認証方式に関する議題と関連度高
+
+2. **キーワードマッチング** (0.0-0.2点)
+   - アジェンダの議題タイトルや期待成果物に含まれる重要なキーワードが発話に含まれているか
+   - ただし、単純なキーワードマッチのみでは判定しない
+
+3. **文脈の整合性** (0.0-0.2点)
+   - 発話内容が会議の目的やアジェンダの流れと整合しているか
+   - 議論が自然に発展しているか
+
+## 判定基準
+- しきい値: {threshold}
+- **関連度が{threshold}未満の場合、脱線と判定**
+- **関連度が{threshold}以上の場合、アジェンダに沿った発話と判定**
+
+## 脱線と判定される具体的な例
+- 完全に無関係な話題（雑談、個人的な話、他の会議の話など）
+- アジェンダの議題や期待成果物と全く関係ない技術的な議論
+- 会議の目的から外れた業務の話
+
+## アジェンダに沿った発話と判定される例
+- アジェンダの議題タイトルや期待成果物に関連する内容を議論している
+- 議題の前提条件や関連情報を説明している
+- 期待成果物を達成するための議論や質問
 
 ## 出力形式（JSON）
 {{
     "is_deviation": true/false,
     "confidence": 0.0-1.0,
     "similarity_score": 0.0-1.0,
-    "best_agenda": "最も関連性の高いアジェンダタイトル",
-    "reasoning": "判定理由の簡潔な説明",
-    "suggested_agenda": ["推奨アジェンダ1", "推奨アジェンダ2"]
+    "best_agenda": "最も関連性の高いアジェンダの議題タイトル",
+    "reasoning": "関連度の算出根拠と判定理由を具体的に説明（意味的関連性、キーワードマッチ、文脈の整合性それぞれの評価を記載）",
+    "suggested_agenda": ["関連性が高いアジェンダの議題タイトル1", "関連性が高いアジェンダの議題タイトル2"]
 }}
 
-## 判定基準
-- しきい値: {threshold}
-- 類似度が{threshold}未満の場合、脱線と判定
-- アジェンダとの関連性は、内容の意味的関連性を重視
-- 単純なキーワードマッチではなく、文脈や意図を考慮
+## 重要な注意事項
+- 関連度は上記3要素（意味的関連性、キーワードマッチング、文脈の整合性）の合計で算出
+- 判定理由には各要素の評価スコアと根拠を明記
+- アジェンダの期待成果物も必ず考慮して判定すること
 
 JSONのみを出力してください。
 """
@@ -191,7 +230,7 @@ JSONのみを出力してください。
         self,
         response: str,
         recent_text: str,
-        agenda_titles: List[str]
+        agenda_items: List[Dict[str, Any]]
     ) -> DeviationAnalysis:
         """AIレスポンスをパースしてDeviationAnalysisオブジェクトを作成"""
         
@@ -207,11 +246,14 @@ JSONのみを出力してください。
             # JSONをパース
             data = json.loads(json_str)
             
+            # アジェンダタイトルリストを作成（フォールバック用）
+            agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
+            
             # メッセージを生成
             if data.get("is_deviation", False):
-                message = f"直近の発話がアジェンダ「{data.get('best_agenda', '')}」から脱線している可能性があります（類似度: {data.get('similarity_score', 0):.2f}）"
+                message = f"直近の発話がアジェンダ「{data.get('best_agenda', '')}」から脱線している可能性があります（関連度: {data.get('similarity_score', 0):.2f}）"
             else:
-                message = f"アジェンダ「{data.get('best_agenda', '')}」に沿った発話です（類似度: {data.get('similarity_score', 0):.2f}）"
+                message = f"アジェンダ「{data.get('best_agenda', '')}」に沿った発話です（関連度: {data.get('similarity_score', 0):.2f}）"
             
             return DeviationAnalysis(
                 is_deviation=data.get("is_deviation", False),
@@ -228,6 +270,7 @@ JSONのみを出力してください。
         except (json.JSONDecodeError, KeyError) as e:
             logger.error(f"AIレスポンスのパースエラー: {e}, response: {response}")
             # フォールバック: デフォルト値を返す
+            agenda_titles = [item.get("title", "") for item in agenda_items if item.get("title")]
             return DeviationAnalysis(
                 is_deviation=False,
                 confidence=0.0,

@@ -223,7 +223,7 @@ sudo apt install ffmpeg
 
 ```bash
 # バックエンドサーバー起動
-python run.py
+python run.py server
 
 # 別のターミナルで音声認識テスト
 python test_whisper.py
