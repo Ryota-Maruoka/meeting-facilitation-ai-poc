@@ -43,14 +43,39 @@ export const useDeviationDetection = ({
   const [isCheckingDeviation, setIsCheckingDeviation] = useState(false);
   const [consecutiveDeviations, setConsecutiveDeviations] = useState(0);
   const [lastCheckedCount, setLastCheckedCount] = useState(0);
+  const [lastCheckedIndex, setLastCheckedIndex] = useState<number>(-1);
 
   // 脱線検知を実行
   const checkDeviation = useCallback(async () => {
     if (isCheckingDeviation || !isMeetingStarted) return;
     
+    // チャンクが存在するかチェック
+    if (transcripts.length === 0) {
+      console.log("⏭️ チャンクがありません（スキップ）");
+      return;
+    }
+    
+    // 最新チャンクのインデックスを取得
+    const currentLatestIndex = transcripts.length - 1;
+    
+    // 既にチェック済みの場合はスキップ（インデックスベースで比較）
+    if (currentLatestIndex <= lastCheckedIndex) {
+      console.log("⏭️ 既にチェック済みのチャンクです（スキップ）", {
+        currentIndex: currentLatestIndex,
+        lastCheckedIndex,
+      });
+      return;
+    }
+    
     setIsCheckingDeviation(true);
     try {
-      console.log("🔍 脱線検知を実行中...", { meetingId, transcriptCount: transcripts.length });
+      console.log("🔍 脱線検知を実行中...", {
+        meetingId,
+        transcriptCount: transcripts.length,
+        currentIndex: currentLatestIndex,
+        lastCheckedIndex,
+        newChunksCount: currentLatestIndex - lastCheckedIndex,
+      });
       const deviationResult = await apiClient.checkDeviation(meetingId);
       
       // バックエンドレスポンスを詳細にログ出力（デバッグ用）
@@ -63,7 +88,9 @@ export const useDeviationDetection = ({
         recent_text: deviationResult.recent_text?.substring(0, 100),
       });
       
-      // チェック済み数を更新
+      // チェック済み情報を更新
+      const latestIndex = transcripts.length - 1;
+      setLastCheckedIndex(latestIndex);
       setLastCheckedCount(transcripts.length);
       
       if (deviationResult.is_deviation) {
@@ -108,25 +135,36 @@ export const useDeviationDetection = ({
     } catch (error) {
       console.error("❌ 脱線検知エラー:", error);
       // エラーの場合もチェック済みとしてカウント
+      const latestIndex = transcripts.length - 1;
+      if (latestIndex >= 0) {
+        setLastCheckedIndex(latestIndex);
+      }
       setLastCheckedCount(transcripts.length);
     } finally {
       setIsCheckingDeviation(false);
     }
-  }, [meetingId, transcripts.length, isMeetingStarted, isCheckingDeviation, consecutiveDeviations]);
+  }, [meetingId, transcripts, isMeetingStarted, isCheckingDeviation, consecutiveDeviations, lastCheckedIndex]);
 
-  // 文字起こし結果が3つ以上になったら脱線検知を実行
+  // 新しいチャンクが追加されたら脱線検知を実行
   useEffect(() => {
     if (!isMeetingStarted) return;
+    if (transcripts.length === 0) return;
     
-    // 3つ以上溜まっていて、かつ前回チェック時よりも増えている場合
-    if (transcripts.length >= 3 && transcripts.length > lastCheckedCount) {
-      console.log("📊 脱線検知トリガー:", { 
-        transcriptCount: transcripts.length, 
-        lastChecked: lastCheckedCount 
+    // 最新チャンクのインデックスを取得
+    const currentLatestIndex = transcripts.length - 1;
+    
+    // 新しいチャンクが追加された場合のみ実行
+    const hasNewChunk = currentLatestIndex > lastCheckedIndex;
+    
+    if (hasNewChunk) {
+      console.log("📊 脱線検知トリガー:", {
+        transcriptCount: transcripts.length,
+        currentIndex: currentLatestIndex,
+        lastCheckedIndex,
       });
       checkDeviation();
     }
-  }, [transcripts.length, lastCheckedCount, isMeetingStarted, checkDeviation]);
+  }, [transcripts.length, lastCheckedIndex, isMeetingStarted, checkDeviation]);
 
   // 脱線アラートのアクション処理
   const handleMarkAsRelated = useCallback((alertId: string) => {
