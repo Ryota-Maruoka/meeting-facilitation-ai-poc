@@ -68,17 +68,34 @@ class DataStore:
     def append_audio_chunk(self, meeting_id: str, audio_data: bytes):
         """音声チャンクを録音ファイルに追記する
 
+        WebM形式のチャンクを正しく結合するため、各チャンクを個別ファイルとして保存し、
+        ダウンロード時にFFmpegで結合する方式に変更。
+
         Args:
             meeting_id: 会議ID
             audio_data: 音声データ（バイナリ）
         """
+        import uuid
+        
         # 会議ディレクトリを作成
         meeting_dir = self._meeting_dir(meeting_id)
         os.makedirs(meeting_dir, exist_ok=True)
 
-        # 録音ファイルに追記モードで書き込み
-        path = self._recording_path(meeting_id)
-        with open(path, "ab") as f:  # "ab" = append binary
+        # 各チャンクを個別ファイルとして保存（WebMの正しい結合のため）
+        chunks_dir = os.path.join(meeting_dir, "audio_chunks")
+        os.makedirs(chunks_dir, exist_ok=True)
+        
+        # チャンクファイル名（タイムスタンプ付き）
+        chunk_filename = f"chunk_{uuid.uuid4().hex[:8]}.webm"
+        chunk_path = os.path.join(chunks_dir, chunk_filename)
+        
+        # チャンクを個別ファイルとして保存
+        with open(chunk_path, "wb") as f:
+            f.write(audio_data)
+        
+        # ダウンロード時は audio_chunks から FFmpeg で正しく結合する
+        legacy_path = self._recording_path(meeting_id)
+        with open(legacy_path, "ab") as f:  # "ab" = append binary
             f.write(audio_data)
 
     def get_recording_path(self, meeting_id: str) -> str:
@@ -88,9 +105,43 @@ class DataStore:
             meeting_id: 会議ID
 
         Returns:
-            録音ファイルの絶対パス
+            録音ファイルの絶対パス（結合済みファイル、または個別チャンクのディレクトリ）
         """
         return self._recording_path(meeting_id)
+    
+    def get_audio_chunks_dir(self, meeting_id: str) -> str:
+        """音声チャンクのディレクトリパスを取得
+
+        Args:
+            meeting_id: 会議ID
+
+        Returns:
+            音声チャンクのディレクトリパス
+        """
+        return os.path.join(self._meeting_dir(meeting_id), "audio_chunks")
+    
+    def list_audio_chunks(self, meeting_id: str) -> list[str]:
+        """音声チャンクファイルのリストを取得（ソート済み）
+
+        Args:
+            meeting_id: 会議ID
+
+        Returns:
+            音声チャンクファイルのパスのリスト（ファイル名でソート）
+        """
+        chunks_dir = self.get_audio_chunks_dir(meeting_id)
+        if not os.path.exists(chunks_dir):
+            return []
+        
+        chunk_files = [
+            os.path.join(chunks_dir, f)
+            for f in os.listdir(chunks_dir)
+            if f.endswith('.webm')
+        ]
+        
+        # ファイル名でソート（chunk_の後の部分でソート）
+        chunk_files.sort()
+        return chunk_files
 
     def load_transcripts(self, meeting_id: str) -> List[Dict[str, Any]]:
         """文字起こしデータを読み込む"""

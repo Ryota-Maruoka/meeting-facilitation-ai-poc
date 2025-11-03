@@ -7,11 +7,12 @@ import tempfile
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi.responses import FileResponse, StreamingResponse
 
 from ..schemas.transcript import TranscriptChunk
 from ..storage import DataStore
-from ..services.asr import transcribe_audio_file
+from ..services.asr import transcribe_audio_file, convert_webm_to_format, combine_webm_chunks
 from ..settings import settings
 
 logger = logging.getLogger(__name__)
@@ -202,8 +203,11 @@ async def transcribe_audio_upload(
             store.append_audio_chunk(meeting_id, content)
 
             # 会議メタデータの更新日時を更新
-            meeting["updated_at"] = datetime.now(timezone.utc)
-            store.save_meeting(meeting_id, meeting)
+            # 注意: parkingフィールドなどの既存データを保護するため、保存前に最新データを再読み込み
+            meeting_to_update = store.load_meeting(meeting_id)
+            if meeting_to_update:
+                meeting_to_update["updated_at"] = datetime.now(timezone.utc).isoformat()
+                store.save_meeting(meeting_id, meeting_to_update)
 
             logger.info("Transcription completed successfully for meeting %s", meeting_id)
             return transcript_entry
@@ -219,4 +223,246 @@ async def transcribe_audio_upload(
     except Exception as e:
         logger.error("Transcription failed for meeting %s: %s", meeting_id, e, exc_info=True)
         raise HTTPException(500, f"Transcription failed: {str(e)}")
+
+
+@router.get("/audio/download")
+def download_audio(
+    meeting_id: str,
+    format: str = Query("wav", description="出力形式: mp3, wav, webm")
+) -> FileResponse:
+    """会議の録音ファイルをダウンロードする。
+
+    Args:
+        meeting_id: 会議ID
+        format: 出力形式（"mp3", "wav", "webm"のいずれか、デフォルト: "wav"）
+
+    Returns:
+        録音ファイル（指定された形式）
+
+    Raises:
+        HTTPException: 会議が見つからない場合、録音ファイルが存在しない場合、形式変換エラー
+    """
+    # 会議の存在確認
+    meeting = store.load_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+
+    # 形式の検証
+    format_lower = format.lower()
+    supported_formats = ["mp3", "wav", "webm"]
+    if format_lower not in supported_formats:
+        raise HTTPException(400, f"サポートされていない形式: {format} (対応形式: {', '.join(supported_formats)})")
+
+    # 会議タイトルを使用してファイル名を生成（ファイル名に使用できない文字を除去）
+    meeting_title = meeting.get("title", "meeting")
+    # ファイル名に使用できない文字を除去（Windows/Mac/Linux共通）
+    safe_title = "".join(c for c in meeting_title if c.isalnum() or c in (" ", "-", "_", "(", ")"))[:50]
+    safe_title = safe_title.strip().replace(" ", "_")  # スペースをアンダースコアに置換
+    
+    # 日付をYYYYMMDD形式で取得（会議開始日時または作成日時から）
+    date_str = ""
+    meeting_date = meeting.get("started_at") or meeting.get("created_at")
+    if meeting_date:
+        try:
+            # ISO 8601形式の文字列から日付を抽出
+            if isinstance(meeting_date, str):
+                dt = datetime.fromisoformat(meeting_date.replace("Z", "+00:00"))
+            else:
+                dt = meeting_date
+            date_str = dt.strftime("%Y%m%d")  # YYYYMMDD形式（4桁年）
+        except (ValueError, AttributeError) as e:
+            logger.warning("Failed to parse meeting date: %s", e)
+            # フォールバック: 現在の日付を使用
+            date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    else:
+        # 日付情報がない場合は現在の日付を使用
+        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    
+    # ファイル名形式: 会議タイトル_YYYYMMDD_会議ID.拡張子
+    filename = f"{safe_title}_{date_str}_{meeting_id}.{format_lower}"
+    
+    # Content-Dispositionヘッダー用にURLエンコード（RFC 5987形式）
+    from urllib.parse import quote
+    filename_encoded = quote(filename, safe='')
+    filename_header = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{filename_encoded}"
+
+    # 音声チャンクファイルのリストを取得（新しい方式）
+    chunk_files = store.list_audio_chunks(meeting_id)
+    
+    # 後方互換性: チャンクファイルがない場合は既存のrecording.webmを使用
+    webm_source_path = None
+    combined_webm_path = None
+    
+    if not chunk_files:
+        recording_path = store.get_recording_path(meeting_id)
+        if not os.path.exists(recording_path):
+            raise HTTPException(404, "Recording file not found")
+        # 既存ファイルを使用（WebM形式の場合のみ）
+        if format_lower == "webm":
+            logger.info("既存のrecording.webmファイルを使用: %s", recording_path)
+            # filename_headerはこの時点では未定義なので、ここで生成
+            from urllib.parse import quote
+            filename_encoded_legacy = quote(filename, safe='')
+            filename_header_legacy = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{filename_encoded_legacy}"
+            # FileResponseはfilenameパラメータで直接設定されるが、ヘッダーも設定可能
+            response = FileResponse(
+                path=recording_path,
+                media_type="audio/webm",
+                filename=filename,
+            )
+            response.headers["Content-Disposition"] = filename_header_legacy
+            return response
+        # 変換が必要な場合は、既存ファイルを使用
+        webm_source_path = recording_path
+    else:
+        # 新しい方式: チャンクファイルを結合
+        logger.info("音声チャンクファイルを結合: %d個のチャンク", len(chunk_files))
+        
+        # 一時的に結合されたWebMファイルを作成
+        import tempfile
+        combined_webm = tempfile.NamedTemporaryFile(suffix='.webm', delete=False)
+        combined_webm_path = combined_webm.name
+        combined_webm.close()
+        
+        try:
+            # FFmpegでチャンクを結合
+            combine_webm_chunks(chunk_files, combined_webm_path)
+            webm_source_path = combined_webm_path
+            logger.info("チャンク結合完了: %s", combined_webm_path)
+        except Exception as e:
+            # 結合に失敗した場合、一時ファイルを削除
+            if os.path.exists(combined_webm_path):
+                try:
+                    os.unlink(combined_webm_path)
+                except Exception:
+                    pass
+            logger.error("WebMチャンクの結合に失敗: %s", e, exc_info=True)
+            raise HTTPException(500, f"音声ファイルの結合に失敗しました: {str(e)}")
+
+    # WebM形式の場合は変換不要
+    if format_lower == "webm":
+        # 結合済みWebMファイルを使用
+        if not os.path.exists(webm_source_path):
+            raise HTTPException(500, "結合されたWebMファイルが見つかりません")
+        
+        logger.info("Downloading audio file (WebM) for meeting %s: %s", meeting_id, webm_source_path)
+        
+        # 一時ファイルの場合は、読み込み後に削除
+        if webm_source_path != store.get_recording_path(meeting_id):
+            def webm_file_generator(file_path: str):
+                file_handle = None
+                try:
+                    file_handle = open(file_path, "rb")
+                    chunk_size = 64 * 1024
+                    while True:
+                        chunk = file_handle.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    if file_handle:
+                        file_handle.close()
+                    if os.path.exists(file_path):
+                        try:
+                            os.unlink(file_path)
+                            logger.info("一時結合ファイルを削除: %s", file_path)
+                        except Exception as e:
+                            logger.warning("一時ファイルの削除に失敗: %s", e)
+            
+            file_size = os.path.getsize(webm_source_path)
+            return StreamingResponse(
+                webm_file_generator(webm_source_path),
+                media_type="audio/webm",
+                headers={
+                    "Content-Disposition": filename_header,
+                    "Content-Length": str(file_size),
+                }
+            )
+        else:
+            # 既存ファイルの場合はそのまま返す
+            response = FileResponse(
+                path=webm_source_path,
+                media_type="audio/webm",
+                filename=filename,
+            )
+            response.headers["Content-Disposition"] = filename_header
+            return response
+
+    # その他の形式の場合は変換が必要
+    try:
+        # WebMを指定形式に変換（結合済みファイルを使用）
+        converted_path = convert_webm_to_format(webm_source_path, format_lower)
+        
+        # 変換されたファイルが存在し、サイズが0でないことを確認
+        if not os.path.exists(converted_path):
+            raise HTTPException(500, "音声ファイルの変換に失敗しました（ファイルが生成されませんでした）")
+        
+        converted_file_size = os.path.getsize(converted_path)
+        if converted_file_size == 0:
+            raise HTTPException(500, "音声ファイルの変換に失敗しました（ファイルサイズが0です）")
+        
+        logger.info("変換完了: ファイルサイズ=%d bytes, パス=%s", converted_file_size, converted_path)
+        
+        # メディアタイプを決定
+        media_types = {
+            "mp3": "audio/mpeg",
+            "wav": "audio/wav",
+        }
+        media_type = media_types.get(format_lower, "audio/octet-stream")
+        
+        logger.info("Downloading audio file (%s) for meeting %s: %s", format_lower, meeting_id, converted_path)
+        
+        # ファイルをチャンク単位で読み込んでから削除するためのジェネレータ関数
+        def file_generator(file_path: str):
+            """ファイルをチャンク単位で読み込んで返し、読み込み完了後に削除する"""
+            file_handle = None
+            try:
+                # ファイルをバイナリモードで開く
+                file_handle = open(file_path, "rb")
+                
+                # チャンクサイズを64KBに設定（メモリ効率とパフォーマンスのバランス）
+                chunk_size = 64 * 1024
+                
+                while True:
+                    chunk = file_handle.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+                    
+            finally:
+                # ファイルハンドルを閉じる
+                if file_handle:
+                    try:
+                        file_handle.close()
+                    except Exception as close_error:
+                        logger.warning("ファイルハンドルのクローズに失敗: %s", close_error)
+                
+                # ファイル読み込み完了後に一時ファイルを削除
+                try:
+                    if os.path.exists(file_path):
+                        os.unlink(file_path)
+                        logger.info("一時ファイルを削除: %s", file_path)
+                except Exception as cleanup_error:
+                    logger.warning("一時ファイルの削除に失敗: %s", cleanup_error)
+        
+        return StreamingResponse(
+            file_generator(converted_path),
+            media_type=media_type,
+            headers={
+                "Content-Disposition": filename_header,
+                "Content-Length": str(converted_file_size),
+            }
+        )
+    except Exception as e:
+        logger.error("Failed to convert audio file: %s", e, exc_info=True)
+        raise HTTPException(500, f"音声ファイルの変換に失敗しました: {str(e)}")
+    finally:
+        # 結合済みWebMファイルが一時ファイルの場合は削除
+        if combined_webm_path and webm_source_path == combined_webm_path:
+            if os.path.exists(webm_source_path):
+                try:
+                    os.unlink(webm_source_path)
+                    logger.info("一時結合ファイルをクリーンアップ: %s", webm_source_path)
+                except Exception as cleanup_error:
+                    logger.warning("一時結合ファイルの削除に失敗: %s", cleanup_error)
 
