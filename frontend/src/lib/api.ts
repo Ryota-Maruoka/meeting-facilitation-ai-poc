@@ -100,8 +100,10 @@ class ApiClient {
 
     try {
       const response = await fetch(url, {
-        ...options,
+        // キャッシュ無効化（古い会議情報が表示されるのを防止）
+        cache: "no-store",
         headers,
+        ...options,
       });
 
       if (!response.ok) {
@@ -140,7 +142,7 @@ class ApiClient {
   }
 
   async getMeeting(id: string): Promise<Meeting> {
-    const data = await this.request<Record<string, unknown>>(`/meetings/${id}`);
+    const data = await this.request<Record<string, unknown>>(`/meetings/${id}?_=${Date.now()}`);
     return this.mapBackendMeetingToFrontend(data);
   }
 
@@ -349,7 +351,7 @@ class ApiClient {
   }
 
   async getParkingItems(meetingId: string): Promise<Array<{ title: string }>> {
-    return this.request(`/meetings/${meetingId}/parking`, {
+    return this.request(`/meetings/${meetingId}/parking?_=${Date.now()}`, {
       method: "GET",
     });
   }

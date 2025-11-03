@@ -71,67 +71,72 @@ export default function MeetingSummaryPage() {
     transcripts: [] as Array<{ text: string; timestamp: string }>,
   });
 
-  // 初期化：sessionStorageとAPIから会議データを取得
+  // 初期化：APIから会議データを取得（sessionStorageに依存しない）
   useEffect(() => {
+    if (!meetingId) return;
+
+    // 取り違え防止のため、遷移直後に初期化
+    setSummaryData({
+      title: "",
+      date: "",
+      participants: "",
+      duration: "",
+      startTime: "",
+      overallSummary: "",
+      keyPoints: [],
+      decisions: [],
+      unresolved: [],
+      actions: [],
+      parkingLot: [],
+      transcripts: [],
+    });
+
+    let isActive = true;
+    const currentId = meetingId;
+
     const fetchSummaryData = async () => {
       try {
-        // sessionStorageから基本情報を取得
-        const storedData = sessionStorage.getItem("meetingSummary");
-        let basicInfo = {
-          title: "",
-          date: "",
-          participants: "",
-          duration: "",
-          startTime: "",
-        };
+        // 会議メタ
+        const meeting = await apiClient.getMeeting(currentId);
+        if (!isActive) return;
 
-        if (storedData) {
-          const data = JSON.parse(storedData);
-          basicInfo = {
-            title: data.title || "",
-            date: data.date || "",
-            participants: data.participants || "",
-            duration: data.duration || "",
-            startTime: data.startTime || "",
-          };
-        }
+        const title = meeting.title || "";
+        const date = meeting.meetingDate || (meeting.created_at ? String(meeting.created_at).split("T")[0] : "");
+        const participants = Array.isArray(meeting.participants) ? meeting.participants.join("、") : "";
 
-        // APIから会議データを取得
-        const meeting = await apiClient.getMeeting(meetingId);
-
-        // APIから要約データを取得
+        // 要約
         setIsLoadingSummary(true);
-        const summary = await apiClient.getSummary(meetingId);
+        const summary = await apiClient.getSummary(currentId);
+        if (!isActive) return;
         setIsLoadingSummary(false);
 
-        // APIから文字起こしデータを取得
+        // 文字起こし
         setIsLoadingTranscripts(true);
-        const transcripts = await apiClient.getTranscripts(meetingId);
+        const transcripts = await apiClient.getTranscripts(currentId);
+        if (!isActive) return;
         setIsLoadingTranscripts(false);
 
-        // APIから保留事項（Parking Lot）を取得（タイトルのみ使用）
-        const parkingItems = await apiClient.getParkingItems(meetingId);
+        // Parking
+        const parkingItems = await apiClient.getParkingItems(currentId);
+        if (!isActive) return;
 
-        // 実施時間を計算（started_atとended_atから）
-        let actualDuration = basicInfo.duration;
-        let actualStartTime = basicInfo.startTime;
+        // 実施時間
+        let durationText = "";
+        let startTimeText = "";
         if (meeting.started_at && meeting.ended_at) {
           const start = new Date(meeting.started_at);
           const end = new Date(meeting.ended_at);
-          const durationMs = end.getTime() - start.getTime();
-          const durationMinutes = Math.floor(durationMs / 60000);
-          actualDuration = `${durationMinutes}分`;
-          
-          // 開始時刻をフォーマット
-          const hours = String(start.getHours()).padStart(2, '0');
-          const minutes = String(start.getMinutes()).padStart(2, '0');
-          actualStartTime = `${hours}:${minutes}`;
+          const minutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+          durationText = `${minutes}分`;
+          startTimeText = `${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}`;
         }
 
         setSummaryData({
-          ...basicInfo,
-          duration: actualDuration,
-          startTime: actualStartTime,
+          title,
+          date,
+          participants,
+          duration: durationText,
+          startTime: startTimeText,
           overallSummary: summary?.summary || "要約データがありません",
           keyPoints: [],
           decisions: summary?.decisions || [],
@@ -150,33 +155,19 @@ export default function MeetingSummaryPage() {
               const meetingStartIso = meeting.started_at ? meeting.started_at : undefined;
               elapsedTime = formatElapsedHMSFromIso(meetingStartIso, t.timestamp);
             }
-            return {
-              text: t.text,
-              timestamp: elapsedTime,
-            };
+            return { text: t.text, timestamp: elapsedTime };
           }),
         });
       } catch (error) {
+        if (!isActive) return;
         console.error("Failed to fetch summary data:", error);
         setIsLoadingSummary(false);
         setIsLoadingTranscripts(false);
-        // エラー時はsessionStorageのデータのみ使用
-        const storedData = sessionStorage.getItem("meetingSummary");
-        if (storedData) {
-          const data = JSON.parse(storedData);
-          setSummaryData((prev) => ({
-            ...prev,
-            title: data.title || "",
-            date: data.date || "",
-            participants: data.participants || "",
-            duration: data.duration || "",
-            startTime: data.startTime || "",
-          }));
-        }
       }
     };
 
     fetchSummaryData();
+    return () => { isActive = false; };
   }, [meetingId]);
 
   // 要約が空の場合、バックグラウンド生成をポーリング
