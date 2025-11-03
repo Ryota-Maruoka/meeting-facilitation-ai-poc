@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 
 from ..schemas.summary import MiniSummary
 from ..storage import DataStore
@@ -275,12 +275,18 @@ def generate_meeting_summary(meeting_id: str) -> dict:
             raise HTTPException(400, "文字起こしデータが見つかりません。会議中に音声を録音してください。")
 
         # 全ての文字起こしテキストを結合
-        all_text = "\n".join([t.get("text", "") for t in transcripts])
+        all_text_full = "\n".join([t.get("text", "") for t in transcripts])
 
-        if not all_text.strip():
+        if not all_text_full.strip():
             raise HTTPException(400, "文字起こしテキストが空です。会議中に音声を録音してください。")
 
-        logger.info("Generating summary for meeting %s", meeting_id)
+        # 入力サイズ制限（安全側）：過度な長文で時間超過しないように直近N文字に制限
+        # ここでは直近 ~30,000 文字を上限に設定
+        MAX_CHARS = 30000
+        all_text = all_text_full[-MAX_CHARS:] if len(all_text_full) > MAX_CHARS else all_text_full
+
+        logger.info("Generating summary for meeting %s (input_chars=%d, truncated=%s)", 
+                   meeting_id, len(all_text), len(all_text_full) > MAX_CHARS)
 
         # 要約を生成
         summary_result = summarize_meeting(all_text, verbose=True)
@@ -307,3 +313,53 @@ def generate_meeting_summary(meeting_id: str) -> dict:
         logger.error("Summary generation failed for meeting %s: %s", meeting_id, e, exc_info=True)
         raise HTTPException(500, f"Summary generation failed: {str(e)}")
 
+
+@router.post("/summary/generate_async")
+def generate_meeting_summary_async(meeting_id: str, background: BackgroundTasks) -> dict:
+    """会議要約を非同期に生成する。
+
+    - 直ちに 202 相当のレスポンスを返し、バックグラウンドで要約を生成して保存する
+    - 完了確認は GET /meetings/{id}/summary（存在すれば200、なければ404）
+
+    Args:
+        meeting_id: 会議ID
+
+    Returns:
+        受け付け結果（accepted: true）
+
+    Raises:
+        HTTPException: 会議が見つからない場合、文字起こしが皆無の場合
+    """
+    meeting = store.load_meeting(meeting_id)
+    if not meeting:
+        raise HTTPException(404, "Meeting not found")
+
+    transcripts = store.load_transcripts(meeting_id)
+    if not transcripts:
+        raise HTTPException(400, "文字起こしデータが見つかりません。会議中に音声を録音してください。")
+
+    # 入力サイズ制限（安全側）：過度な長文で時間超過しないように直近N文字に制限
+    # ここでは直近 ~30,000 文字を上限に設定
+    all_text_full = "\n".join([t.get("text", "") for t in transcripts])
+    MAX_CHARS = 30000
+    all_text = all_text_full[-MAX_CHARS:] if len(all_text_full) > MAX_CHARS else all_text_full
+
+    def _run():
+        try:
+            logger.info("[ASYNC] Summary generation started: meeting_id=%s, input_chars=%d", meeting_id, len(all_text))
+            result = summarize_meeting(all_text, verbose=True)
+            summary_data = {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "summary": result.summary,
+                "decisions": result.decisions,
+                "undecided": result.undecided,
+                "actions": [action.model_dump() for action in result.actions],
+            }
+            store.save_summary(meeting_id, summary_data)
+            logger.info("[ASYNC] Summary generated and saved: meeting_id=%s", meeting_id)
+        except Exception as exc:  # 失敗時もログのみ（APIは既に返却済み）
+            logger.error("[ASYNC] Summary generation failed: meeting_id=%s, error=%s", meeting_id, exc, exc_info=True)
+
+    background.add_task(_run)
+    # 受け付けたことだけ返却（FastAPI は200を返すが、クライアント側はacceptedを見て判断）
+    return {"accepted": True}

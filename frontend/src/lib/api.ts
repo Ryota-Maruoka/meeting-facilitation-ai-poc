@@ -440,14 +440,28 @@ class ApiClient {
   }
 
   // 要約取得・生成
-  async getSummary(meetingId: string): Promise<any> {
-    return this.request<any>(`/meetings/${meetingId}/summary`, {
-      method: "GET",
-    });
+  async getSummary(meetingId: string): Promise<any | null> {
+    try {
+      return await this.request<any>(`/meetings/${meetingId}/summary`, {
+        method: "GET",
+      });
+    } catch (err) {
+      // 404（未生成）は null を返す（UI側で待機表示）
+      if (err instanceof Error && /HTTP 404/.test(err.message)) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   async generateSummary(meetingId: string): Promise<any> {
     return this.request<any>(`/meetings/${meetingId}/summary/generate`, {
+      method: "POST",
+    });
+  }
+
+  async generateSummaryAsync(meetingId: string): Promise<{ accepted: boolean }> {
+    return this.request<{ accepted: boolean }>(`/meetings/${meetingId}/summary/generate_async`, {
       method: "POST",
     });
   }

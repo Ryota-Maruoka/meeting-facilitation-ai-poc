@@ -70,6 +70,8 @@ export default function MeetingSummaryPage() {
     parkingLot: [] as string[],
     transcripts: [] as Array<{ text: string; timestamp: string }>,
   });
+  const [isPollingSummary, setIsPollingSummary] = useState<boolean>(false);
+  const [isSummaryUnavailable, setIsSummaryUnavailable] = useState<boolean>(false);
 
   // 初期化：APIから会議データを取得（sessionStorageに依存しない）
   useEffect(() => {
@@ -137,7 +139,7 @@ export default function MeetingSummaryPage() {
           participants,
           duration: durationText,
           startTime: startTimeText,
-          overallSummary: summary?.summary || "要約データがありません",
+          overallSummary: summary?.summary || "",
           keyPoints: [],
           decisions: summary?.decisions || [],
           unresolved: summary?.undecided || [],
@@ -158,6 +160,11 @@ export default function MeetingSummaryPage() {
             return { text: t.text, timestamp: elapsedTime };
           }),
         });
+
+        // 初期ロード時に要約が取得できた場合はリセット
+        if (summary?.summary) {
+          setIsSummaryUnavailable(false);
+        }
       } catch (error) {
         if (!isActive) return;
         console.error("Failed to fetch summary data:", error);
@@ -174,7 +181,7 @@ export default function MeetingSummaryPage() {
   useEffect(() => {
     // 要約が既に存在する、またはローディング中の場合はポーリング不要
     if (isLoadingSummary) return;
-    if (summaryData.overallSummary && summaryData.overallSummary !== "要約データがありません") return;
+    if (summaryData.overallSummary) return;
 
     let pollCount = 0;
     const maxPolls = 30; // 最大30回（2.5分間）
@@ -201,6 +208,9 @@ export default function MeetingSummaryPage() {
             })),
           }));
 
+          // 要約が取得できたのでリセット
+          setIsSummaryUnavailable(false);
+
           // ポーリング停止
           if (pollInterval) {
             clearInterval(pollInterval);
@@ -210,6 +220,7 @@ export default function MeetingSummaryPage() {
           if (pollInterval) {
             clearInterval(pollInterval);
           }
+          setIsSummaryUnavailable(true);
         }
       } catch (error) {
         console.error("要約のポーリングに失敗しました:", error);
@@ -217,6 +228,7 @@ export default function MeetingSummaryPage() {
     };
 
     // 5秒ごとにポーリング
+    setIsPollingSummary(true);
     const pollInterval = setInterval(pollSummary, 5000);
 
     // 初回は即座に実行
@@ -226,6 +238,7 @@ export default function MeetingSummaryPage() {
       if (pollInterval) {
         clearInterval(pollInterval);
       }
+      setIsPollingSummary(false);
     };
   }, [meetingId, isLoadingSummary, summaryData.overallSummary]);
 
@@ -340,10 +353,18 @@ export default function MeetingSummaryPage() {
               <span>要約</span>
             </div>
             <div className="column-content">
-              {isLoadingSummary || summaryData.overallSummary === "要約データがありません" ? (
+              {!summaryData.overallSummary ? (
                 <div className="loading-box">
-                  <div className="spinner"></div>
-                  <span>生成中...</span>
+                  {isLoadingSummary || isPollingSummary ? (
+                    <>
+                      <div className="spinner"></div>
+                      <span>要約生成中...</span>
+                    </>
+                  ) : isSummaryUnavailable ? (
+                    <span>要約データがありません</span>
+                  ) : (
+                    <span>会議開始から約3分後に要約が自動生成されます</span>
+                  )}
                 </div>
               ) : (
                 <div style={{ lineHeight: 1.6, fontSize: "14px", color: "#374151" }}>
@@ -386,10 +407,18 @@ export default function MeetingSummaryPage() {
               <span>決定事項・未決事項・アクション・保留事項</span>
             </div>
             <div className="column-content">
-              {isLoadingSummary || summaryData.overallSummary === "要約データがありません" ? (
+              {!summaryData.overallSummary ? (
                 <div className="loading-box">
-                  <div className="spinner"></div>
-                  <span>生成中...</span>
+                  {isLoadingSummary || isPollingSummary ? (
+                    <>
+                      <div className="spinner"></div>
+                      <span>要約生成中...</span>
+                    </>
+                  ) : isSummaryUnavailable ? (
+                    <span>要約データがありません</span>
+                  ) : (
+                    <span>会議開始から約3分後に要約が自動生成されます</span>
+                  )}
                 </div>
               ) : (
                 <>
