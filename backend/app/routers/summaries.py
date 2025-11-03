@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 
@@ -252,7 +252,7 @@ def get_summary(meeting_id: str) -> dict:
 def generate_meeting_summary(meeting_id: str) -> dict:
     """会議要約を生成する。
 
-    全ての文字起こしテキストを要約APIに送信し、要約を生成する。
+    前回の要約生成時点以降の文字起こしテキストを使用し、前回の要約をコンテキストとして活用して要約を生成する。
     生成された要約はsummary.jsonに保存される。
 
     Args:
@@ -274,22 +274,129 @@ def generate_meeting_summary(meeting_id: str) -> dict:
         if not transcripts:
             raise HTTPException(400, "文字起こしデータが見つかりません。会議中に音声を録音してください。")
 
-        # 全ての文字起こしテキストを結合
-        all_text_full = "\n".join([t.get("text", "") for t in transcripts])
+        # 前回の要約を取得（存在する場合）
+        previous_summary = store.load_summary(meeting_id)
+        previous_generated_at = None
+        if previous_summary and "generated_at" in previous_summary:
+            try:
+                previous_generated_at = datetime.fromisoformat(
+                    previous_summary["generated_at"].replace("Z", "+00:00")
+                )
+                logger.info(
+                    "Previous summary found: generated_at=%s",
+                    previous_summary["generated_at"]
+                )
+            except (ValueError, AttributeError) as e:
+                logger.warning(
+                    "Failed to parse previous summary generated_at: %s", e
+                )
+
+        # 前回の要約生成時点前後を含む文字起こしを抽出（文脈の継続性を保つため）
+        # 前回生成時点の3分前から、現在までの文字起こしを含める
+        CONTEXT_BUFFER_MINUTES = 3
+        new_transcripts = []
+        if previous_generated_at:
+            # 前回生成時点の3分前を起点とする（文脈の継続性のため）
+            context_start = previous_generated_at - timedelta(minutes=CONTEXT_BUFFER_MINUTES)
+            logger.info(
+                "Extracting transcripts from %s (3 minutes before previous summary) to now",
+                context_start.isoformat()
+            )
+            # 前回生成時点の3分前以降の文字起こしを取得
+            for t in transcripts:
+                transcript_timestamp_str = t.get("timestamp")
+                if transcript_timestamp_str:
+                    try:
+                        transcript_timestamp = datetime.fromisoformat(
+                            transcript_timestamp_str.replace("Z", "+00:00")
+                        )
+                        if transcript_timestamp >= context_start:
+                            new_transcripts.append(t)
+                    except (ValueError, AttributeError):
+                        # タイムスタンプが不正な場合は含める（安全のため）
+                        logger.warning(
+                            "Invalid transcript timestamp: %s", transcript_timestamp_str
+                        )
+                        new_transcripts.append(t)
+                else:
+                    # タイムスタンプがない場合は含める（後方互換性）
+                    new_transcripts.append(t)
+        else:
+            # 前回の要約がない場合は全文字起こしを使用
+            new_transcripts = transcripts
+
+        # 新しい文字起こしテキストを結合
+        all_text_full = "\n".join([t.get("text", "") for t in new_transcripts])
 
         if not all_text_full.strip():
+            if previous_generated_at:
+                logger.info("No new transcripts since previous summary.")
+                # 前回の要約を返す（新しい要約がない場合）
+                return previous_summary
             raise HTTPException(400, "文字起こしテキストが空です。会議中に音声を録音してください。")
 
-        # 入力サイズ制限（安全側）：過度な長文で時間超過しないように直近N文字に制限
-        # ここでは直近 ~30,000 文字を上限に設定
+        # 入力サイズ制限：30,000文字を超えた場合のみ直近30,000文字に制限
+        # 30,000文字以下の場合は全体を使用（文脈の完全性を保つため）
         MAX_CHARS = 30000
-        all_text = all_text_full[-MAX_CHARS:] if len(all_text_full) > MAX_CHARS else all_text_full
+        use_previous_summary = False
+        
+        if len(all_text_full) > MAX_CHARS:
+            # 30,000文字を超える場合のみ、直近30,000文字 + 前回の要約を使用
+            all_text = all_text_full[-MAX_CHARS:]
+            use_previous_summary = True
+            logger.info(
+                "New transcripts exceed %d chars (%d). Using recent %d chars + previous summary.",
+                MAX_CHARS, len(all_text_full), MAX_CHARS
+            )
+        else:
+            # 30,000文字以下の場合は全体を使用（前回の要約は使わない）
+            all_text = all_text_full
+            use_previous_summary = False
+            logger.info(
+                "Using all new transcripts (total chars: %d, within limit). Previous summary not used.",
+                len(all_text_full)
+            )
 
-        logger.info("Generating summary for meeting %s (input_chars=%d, truncated=%s)", 
-                   meeting_id, len(all_text), len(all_text_full) > MAX_CHARS)
+        # 30,000文字超過の場合のみ、前回の要約をコンテキストとして準備
+        previous_summary_context = None
+        if use_previous_summary and previous_summary:
+            # 前回の要約の主要情報をコンテキストとして抽出
+            prev_summary_text = previous_summary.get("summary", "")
+            prev_decisions = previous_summary.get("decisions", [])
+            prev_undecided = previous_summary.get("undecided", [])
+            
+            context_parts = []
+            if prev_summary_text:
+                context_parts.append(f"【前回の要約】\n{prev_summary_text}")
+            if prev_decisions:
+                context_parts.append(f"【前回の決定事項】\n" + "\n".join(f"- {d}" for d in prev_decisions))
+            if prev_undecided:
+                context_parts.append(f"【前回の未決事項】\n" + "\n".join(f"- {u}" for u in prev_undecided))
+            
+            if context_parts:
+                previous_summary_context = "\n\n".join(context_parts)
+                logger.info(
+                    "Previous summary context prepared (length=%d) - will be combined with truncated transcripts",
+                    len(previous_summary_context)
+                )
 
-        # 要約を生成
-        summary_result = summarize_meeting(all_text, verbose=True)
+        logger.info(
+            "Generating summary for meeting %s (input_chars=%d, truncated=%s, using_previous=%s)", 
+            meeting_id, len(all_text), len(all_text_full) > MAX_CHARS, use_previous_summary
+        )
+
+        # 30,000文字超過の場合のみ、前回の要約コンテキストと新しい文字起こしを組み合わせて要約生成
+        if previous_summary_context:
+            # 前回の要約 + 新しい文字起こし（直近30,000文字）を結合
+            combined_text = f"{previous_summary_context}\n\n【新しい会話内容】\n{all_text}"
+            logger.info(
+                "Using combined text (previous context + recent %d chars): total_chars=%d",
+                MAX_CHARS, len(combined_text)
+            )
+            summary_result = summarize_meeting(combined_text, verbose=True)
+        else:
+            # 30,000文字以下の場合は、新しい文字起こしのみを使用
+            summary_result = summarize_meeting(all_text, verbose=True)
 
         # 要約データを作成
         summary_data = {
@@ -320,6 +427,7 @@ def generate_meeting_summary_async(meeting_id: str, background: BackgroundTasks)
 
     - 直ちに 202 相当のレスポンスを返し、バックグラウンドで要約を生成して保存する
     - 完了確認は GET /meetings/{id}/summary（存在すれば200、なければ404）
+    - 前回の要約生成時点以降の文字起こしのみを使用し、前回の要約をコンテキストとして活用
 
     Args:
         meeting_id: 会議ID
@@ -338,16 +446,137 @@ def generate_meeting_summary_async(meeting_id: str, background: BackgroundTasks)
     if not transcripts:
         raise HTTPException(400, "文字起こしデータが見つかりません。会議中に音声を録音してください。")
 
-    # 入力サイズ制限（安全側）：過度な長文で時間超過しないように直近N文字に制限
-    # ここでは直近 ~30,000 文字を上限に設定
-    all_text_full = "\n".join([t.get("text", "") for t in transcripts])
+    # 前回の要約を取得（存在する場合）
+    previous_summary = store.load_summary(meeting_id)
+    previous_generated_at = None
+    if previous_summary and "generated_at" in previous_summary:
+        try:
+            previous_generated_at = datetime.fromisoformat(
+                previous_summary["generated_at"].replace("Z", "+00:00")
+            )
+            logger.info(
+                "[ASYNC] Previous summary found: generated_at=%s",
+                previous_summary["generated_at"]
+            )
+        except (ValueError, AttributeError) as e:
+            logger.warning(
+                "[ASYNC] Failed to parse previous summary generated_at: %s", e
+            )
+
+    # 前回の要約生成時点前後を含む文字起こしを抽出（文脈の継続性を保つため）
+    # 前回生成時点の3分前から、現在までの文字起こしを含める
+    CONTEXT_BUFFER_MINUTES = 3
+    new_transcripts = []
+    if previous_generated_at:
+        # 前回生成時点の3分前を起点とする（文脈の継続性のため）
+        context_start = previous_generated_at - timedelta(minutes=CONTEXT_BUFFER_MINUTES)
+        logger.info(
+            "[ASYNC] Extracting transcripts from %s (3 minutes before previous summary) to now",
+            context_start.isoformat()
+        )
+        # 前回生成時点の3分前以降の文字起こしを取得
+        for t in transcripts:
+            transcript_timestamp_str = t.get("timestamp")
+            if transcript_timestamp_str:
+                try:
+                    transcript_timestamp = datetime.fromisoformat(
+                        transcript_timestamp_str.replace("Z", "+00:00")
+                    )
+                    if transcript_timestamp >= context_start:
+                        new_transcripts.append(t)
+                except (ValueError, AttributeError):
+                    # タイムスタンプが不正な場合は含める（安全のため）
+                    logger.warning(
+                        "[ASYNC] Invalid transcript timestamp: %s", transcript_timestamp_str
+                    )
+                    new_transcripts.append(t)
+            else:
+                # タイムスタンプがない場合は含める（後方互換性）
+                new_transcripts.append(t)
+    else:
+        # 前回の要約がない場合は全文字起こしを使用
+        new_transcripts = transcripts
+
+    # 新しい文字起こしテキストを結合
+    all_text_full = "\n".join([t.get("text", "") for t in new_transcripts])
+
+    if not all_text_full.strip():
+        if previous_generated_at:
+            logger.info(
+                "[ASYNC] No new transcripts since previous summary. Skipping generation."
+            )
+            return {"accepted": True, "skipped": True, "reason": "no_new_transcripts"}
+        raise HTTPException(400, "文字起こしテキストが空です。会議中に音声を録音してください。")
+
+    # 入力サイズ制限：30,000文字を超えた場合のみ直近30,000文字に制限
+    # 30,000文字以下の場合は全体を使用（文脈の完全性を保つため）
     MAX_CHARS = 30000
-    all_text = all_text_full[-MAX_CHARS:] if len(all_text_full) > MAX_CHARS else all_text_full
+    use_previous_summary = False
+    
+    if len(all_text_full) > MAX_CHARS:
+        # 30,000文字を超える場合のみ、直近30,000文字 + 前回の要約を使用
+        all_text = all_text_full[-MAX_CHARS:]
+        use_previous_summary = True
+        logger.info(
+            "[ASYNC] New transcripts exceed %d chars (%d). Using recent %d chars + previous summary.",
+            MAX_CHARS, len(all_text_full), MAX_CHARS
+        )
+    else:
+        # 30,000文字以下の場合は全体を使用（前回の要約は使わない）
+        all_text = all_text_full
+        use_previous_summary = False
+        logger.info(
+            "[ASYNC] Using all new transcripts (total chars: %d, within limit). Previous summary not used.",
+            len(all_text_full)
+        )
+
+    # 30,000文字超過の場合のみ、前回の要約をコンテキストとして準備
+    previous_summary_context = None
+    if use_previous_summary and previous_summary:
+        # 前回の要約の主要情報をコンテキストとして抽出
+        prev_summary_text = previous_summary.get("summary", "")
+        prev_decisions = previous_summary.get("decisions", [])
+        prev_undecided = previous_summary.get("undecided", [])
+        
+        context_parts = []
+        if prev_summary_text:
+            context_parts.append(f"【前回の要約】\n{prev_summary_text}")
+        if prev_decisions:
+            context_parts.append(f"【前回の決定事項】\n" + "\n".join(f"- {d}" for d in prev_decisions))
+        if prev_undecided:
+            context_parts.append(f"【前回の未決事項】\n" + "\n".join(f"- {u}" for u in prev_undecided))
+        
+        if context_parts:
+            previous_summary_context = "\n\n".join(context_parts)
+            logger.info(
+                "[ASYNC] Previous summary context prepared (length=%d) - will be combined with truncated transcripts",
+                len(previous_summary_context)
+            )
 
     def _run():
         try:
-            logger.info("[ASYNC] Summary generation started: meeting_id=%s, input_chars=%d", meeting_id, len(all_text))
-            result = summarize_meeting(all_text, verbose=True)
+            logger.info(
+                "[ASYNC] Summary generation started: meeting_id=%s, "
+                "input_chars=%d, truncated=%s, using_previous=%s",
+                meeting_id,
+                len(all_text),
+                len(all_text_full) > MAX_CHARS,
+                use_previous_summary,
+            )
+            
+            # 30,000文字超過の場合のみ、前回の要約コンテキストと新しい文字起こしを組み合わせて要約生成
+            if previous_summary_context:
+                # 前回の要約 + 新しい文字起こし（直近30,000文字）を結合
+                combined_text = f"{previous_summary_context}\n\n【新しい会話内容】\n{all_text}"
+                logger.info(
+                    "[ASYNC] Using combined text (previous context + recent %d chars): total_chars=%d",
+                    MAX_CHARS, len(combined_text)
+                )
+                result = summarize_meeting(combined_text, verbose=True)
+            else:
+                # 30,000文字以下の場合は、新しい文字起こしのみを使用
+                result = summarize_meeting(all_text, verbose=True)
+            
             summary_data = {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "summary": result.summary,
