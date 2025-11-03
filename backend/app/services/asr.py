@@ -137,6 +137,300 @@ def _filter_hallucination_text(text: str, is_weakly_silence: bool = False) -> st
     return text
 
 
+def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
+    """
+    WebMチャンクファイルをFFmpegで正しく結合する
+    
+    確実な結合のため、以下の手順を実行：
+    1. 各WebMチャンクをWAVに変換
+    2. WAVファイルをconcatデマックスで結合（-c copyで高速）
+    3. 結合したWAVをWebMに変換して出力
+    
+    Args:
+        chunk_files: WebMチャンクファイルのパスのリスト
+        output_path: 結合後の出力ファイルパス（WebM形式）
+        
+    Returns:
+        結合されたファイルのパス
+        
+    Raises:
+        RuntimeError: 結合に失敗した場合
+    """
+    import logging
+    import subprocess
+    import tempfile
+    import shutil
+    
+    logger = logging.getLogger(__name__)
+    
+    if not chunk_files:
+        raise ValueError("結合するチャンクファイルがありません")
+    
+    # チャンクファイルが1つの場合はコピーするだけ
+    if len(chunk_files) == 1:
+        shutil.copy2(chunk_files[0], output_path)
+        logger.info(f"チャンクファイルが1つのため、コピー: {output_path}")
+        return output_path
+    
+    # 一時ファイル用のディレクトリ
+    temp_dir = tempfile.mkdtemp()
+    wav_files = []
+    concat_path = None
+    
+    try:
+        # ステップ1: 各WebMチャンクをWAVに変換
+        logger.info(f"ステップ1: WebMチャンクをWAVに変換開始（{len(chunk_files)}個）")
+        for idx, chunk_file in enumerate(chunk_files):
+            wav_path = os.path.join(temp_dir, f"chunk_{idx:04d}.wav")
+            
+            # WebM → WAV変換
+            cmd_convert = [
+                'ffmpeg',
+                '-y',
+                '-i', chunk_file,
+                '-ar', '44100',      # サンプルレート
+                '-ac', '2',          # ステレオ
+                '-c:a', 'pcm_s16le', # 16-bit PCM
+                '-f', 'wav',
+                wav_path
+            ]
+            
+            logger.debug(f"チャンク{idx}変換: {' '.join(cmd_convert)}")
+            result = subprocess.run(
+                cmd_convert,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=True
+            )
+            
+            if not os.path.exists(wav_path) or os.path.getsize(wav_path) == 0:
+                raise RuntimeError(f"チャンク{idx}のWAV変換に失敗: {wav_path}")
+            
+            wav_files.append(wav_path)
+            logger.debug(f"チャンク{idx}変換完了: {os.path.getsize(wav_path)} bytes")
+        
+        # ステップ2: WAVファイルをconcatデマックスで結合
+        logger.info(f"ステップ2: WAVファイルを結合開始（{len(wav_files)}個）")
+        
+        # concatファイルリストを作成
+        concat_path = os.path.join(temp_dir, "concat_list.txt")
+        with open(concat_path, 'w', encoding='utf-8') as concat_file:
+            for wav_file in wav_files:
+                # Windowsパスの場合、バックスラッシュをスラッシュに変換
+                normalized_path = wav_file.replace('\\', '/')
+                concat_file.write(f"file '{normalized_path}'\n")
+        
+        # 結合したWAVを一時ファイルとして作成
+        combined_wav_path = os.path.join(temp_dir, "combined.wav")
+        
+        cmd_concat = [
+            'ffmpeg',
+            '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', concat_path,
+            '-c', 'copy',  # 再エンコードなし（高速・確実）
+            combined_wav_path
+        ]
+        
+        logger.info(f"WAV結合コマンド: {' '.join(cmd_concat)}")
+        result = subprocess.run(
+            cmd_concat,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=True
+        )
+        
+        if not os.path.exists(combined_wav_path) or os.path.getsize(combined_wav_path) == 0:
+            raise RuntimeError(f"結合されたWAVファイルが生成されませんでした: {combined_wav_path}")
+        
+        combined_wav_size = os.path.getsize(combined_wav_path)
+        logger.info(f"WAV結合完了: {combined_wav_size} bytes")
+        
+        # ステップ3: 結合したWAVをWebMに変換
+        logger.info(f"ステップ3: 結合WAVをWebMに変換開始")
+        
+        cmd_webm = [
+            'ffmpeg',
+            '-y',
+            '-i', combined_wav_path,
+            '-c:a', 'libopus',  # Opusコーデック（WebM標準）
+            '-b:a', '128k',     # ビットレート
+            '-f', 'webm',       # 出力形式を明示
+            output_path
+        ]
+        
+        logger.info(f"WebM変換コマンド: {' '.join(cmd_webm)}")
+        result = subprocess.run(
+            cmd_webm,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=True
+        )
+        
+        # 最終ファイルを確認
+        if not os.path.exists(output_path):
+            raise RuntimeError(f"結合されたWebMファイルが生成されませんでした: {output_path}")
+        
+        output_file_size = os.path.getsize(output_path)
+        if output_file_size == 0:
+            raise RuntimeError(f"結合されたWebMファイルのサイズが0です: {output_path}")
+        
+        logger.info(f"WebMチャンク結合完了: {output_path}, ファイルサイズ={output_file_size} bytes")
+        return output_path
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg処理エラー: {e}")
+        logger.error(f"returncode: {e.returncode}")
+        if e.stderr:
+            logger.error(f"stderr（最後の500文字）: {e.stderr[-500:]}")
+        if e.stdout:
+            logger.error(f"stdout（最後の500文字）: {e.stdout[-500:]}")
+        raise RuntimeError(f"WebMチャンクの結合に失敗しました: {e.stderr[-200] if e.stderr else str(e)}")
+    except subprocess.TimeoutExpired:
+        logger.error("FFmpeg処理がタイムアウトしました")
+        raise RuntimeError("WebMチャンクの結合がタイムアウトしました")
+    except FileNotFoundError:
+        logger.error("ffmpegが見つかりません")
+        raise RuntimeError("ffmpeg is required for audio chunk combination. Please install ffmpeg.")
+    finally:
+        # 一時ディレクトリを削除
+        try:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+                logger.debug(f"一時ディレクトリを削除: {temp_dir}")
+        except Exception as cleanup_error:
+            logger.warning(f"一時ディレクトリの削除に失敗: {cleanup_error}")
+
+
+def convert_webm_to_format(webm_file_path: str, output_format: str = "mp3") -> str:
+    """
+    WebM形式の音声ファイルを指定形式に変換する
+    
+    Args:
+        webm_file_path: WebM音声ファイルのパス
+        output_format: 出力形式（"mp3", "wav", "webm"など）
+        
+    Returns:
+        変換後の音声ファイルのパス（一時ファイル）
+        
+    Raises:
+        RuntimeError: 変換に失敗した場合
+        ValueError: サポートされていない形式が指定された場合
+    """
+    import logging
+    import subprocess
+    import tempfile
+    
+    logger = logging.getLogger(__name__)
+    
+    # サポートされている形式
+    supported_formats = ["mp3", "wav", "webm"]
+    if output_format.lower() not in supported_formats:
+        raise ValueError(f"サポートされていない形式: {output_format} (対応形式: {', '.join(supported_formats)})")
+    
+    # WebM形式の場合は変換不要
+    if output_format.lower() == "webm":
+        return webm_file_path
+    
+    # 一時出力ファイルを作成
+    output_file = tempfile.NamedTemporaryFile(suffix=f'.{output_format}', delete=False)
+    output_path = output_file.name
+    output_file.close()
+    
+    try:
+        # FFmpegコマンドを構築
+        cmd = [
+            'ffmpeg',
+            '-y',  # 上書き確認なし
+            '-i', webm_file_path,  # 入力ファイル
+        ]
+        
+        # 出力形式に応じてパラメータを設定
+        if output_format.lower() == "mp3":
+            # MP3: 128kbps, 44.1kHz, ステレオ（一般的な設定）
+            # 互換性を重視したシンプルな設定
+            cmd.extend([
+                '-codec:a', 'libmp3lame',
+                '-b:a', '128k',  # ビットレート
+                '-ar', '44100',  # サンプルレート
+                '-ac', '2',      # ステレオ
+            ])
+        elif output_format.lower() == "wav":
+            # WAV: 44.1kHz, ステレオ, 16-bit PCM（高品質・互換性重視）
+            cmd.extend([
+                '-ar', '44100',      # サンプルレート
+                '-ac', '2',          # ステレオ
+                '-c:a', 'pcm_s16le', # 16-bit PCM（無圧縮）
+            ])
+        
+        cmd.append(output_path)
+        
+        logger.info(f"音声変換開始: {webm_file_path} -> {output_path} ({output_format})")
+        logger.debug(f"FFmpegコマンド: {' '.join(cmd)}")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5分タイムアウト（長時間の録音に対応）
+            check=True
+        )
+        
+        # FFmpegの出力をログに記録（エラー確認用）
+        if result.stdout:
+            logger.debug(f"FFmpeg stdout: {result.stdout[:500]}")
+        if result.stderr:
+            # stderrは通常、進行状況情報を含むため、警告レベルで記録
+            logger.debug(f"FFmpeg stderr: {result.stderr[:500]}")
+        
+        # 変換後のファイルが存在し、サイズが0でないことを確認
+        if not os.path.exists(output_path):
+            logger.error(f"変換されたファイルが存在しません: {output_path}")
+            if result.stderr:
+                logger.error(f"FFmpeg stderr（全体）: {result.stderr}")
+            raise RuntimeError(f"変換されたファイルが生成されませんでした: {output_path}")
+        
+        output_file_size = os.path.getsize(output_path)
+        if output_file_size == 0:
+            logger.error(f"変換されたファイルのサイズが0です: {output_path}")
+            if result.stderr:
+                logger.error(f"FFmpeg stderr（全体）: {result.stderr}")
+            raise RuntimeError(f"変換されたファイルのサイズが0です: {output_path}")
+        
+        logger.info(f"音声変換完了: {output_path} ({output_format}), ファイルサイズ={output_file_size} bytes")
+        return output_path
+        
+    except subprocess.CalledProcessError as e:
+        logger.error(f"FFmpeg変換エラー: {e}")
+        logger.error(f"returncode: {e.returncode}")
+        logger.error(f"stderr: {e.stderr[:500] if e.stderr else '(empty)'}")
+        
+        # 一時ファイルを削除
+        if os.path.exists(output_path):
+            try:
+                os.unlink(output_path)
+            except Exception:
+                pass
+        
+        raise RuntimeError(f"音声形式の変換に失敗しました: {output_format}")
+    except subprocess.TimeoutExpired:
+        logger.error("FFmpeg変換がタイムアウトしました")
+        # 一時ファイルを削除
+        if os.path.exists(output_path):
+            try:
+                os.unlink(output_path)
+            except Exception:
+                pass
+        raise RuntimeError("音声変換がタイムアウトしました")
+    except FileNotFoundError:
+        logger.error("ffmpegが見つかりません。ffmpegのインストールが必要です")
+        raise RuntimeError("ffmpeg is required for audio conversion. Please install ffmpeg.")
+
+
 def convert_webm_to_wav(webm_data: bytes) -> bytes:
     """
     WebM形式の音声データをWAV（16kHz mono PCM）に変換
