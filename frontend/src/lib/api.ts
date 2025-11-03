@@ -258,10 +258,10 @@ class ApiClient {
    * 会議の録音ファイルをダウンロードする
    * 
    * @param meetingId - 会議ID
-   * @param format - 出力形式（"mp3", "wav", "webm"、デフォルト: "wav"）
+   * @param format - 出力形式（"mp3", "wav", "webm"、デフォルト: "mp3"）
    * @param filename - ダウンロード時のファイル名（省略可）
    */
-  async downloadAudio(meetingId: string, format: string = "wav", filename?: string): Promise<void> {
+  async downloadAudio(meetingId: string, format: string = "mp3", filename?: string): Promise<void> {
     const url = `${this.baseUrl}/meetings/${meetingId}/audio/download?format=${format}`;
     
     try {
@@ -280,7 +280,9 @@ class ApiClient {
       // ファイル名を決定（Content-Dispositionヘッダーから取得、またはデフォルト）
       let downloadFilename = filename;
       if (!downloadFilename) {
-        const contentDisposition = response.headers.get("content-disposition");
+        // Content-Dispositionヘッダーを取得（大文字小文字を区別しない）
+        const contentDisposition = response.headers.get("content-disposition") || response.headers.get("Content-Disposition");
+        
         if (contentDisposition) {
           // RFC 5987形式（filename*=UTF-8''...）を優先的に取得
           const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
@@ -289,14 +291,31 @@ class ApiClient {
             downloadFilename = decodeURIComponent(encodedMatch[1]);
           } else {
             // 通常のfilename属性を取得
-            const filenameMatch = contentDisposition.match(/filename=["']?([^"';]+)["']?/i);
-            if (filenameMatch) {
+            // パターン1: filename="..." の形式（ダブルクォート）
+            let filenameMatch = contentDisposition.match(/filename\s*=\s*"([^"]+)"/i);
+            if (filenameMatch && filenameMatch[1]) {
               downloadFilename = filenameMatch[1].trim();
+            } else {
+              // パターン2: filename='...' の形式（シングルクォート）
+              filenameMatch = contentDisposition.match(/filename\s*=\s*'([^']+)'/i);
+              if (filenameMatch && filenameMatch[1]) {
+                downloadFilename = filenameMatch[1].trim();
+              } else {
+                // パターン3: filename=... の形式（クォートなし、セミコロンまで）
+                filenameMatch = contentDisposition.match(/filename\s*=\s*([^;]+)/i);
+                if (filenameMatch && filenameMatch[1]) {
+                  downloadFilename = filenameMatch[1].trim().replace(/^["']|["']$/g, ""); // 前後のクォートを除去
+                }
+              }
             }
           }
         }
       }
+      
+      // デフォルト値は使用しない（バックエンドから送られてくるファイル名を使用）
+      // ただし、ファイル名が取得できない場合のみデフォルト値を使用
       if (!downloadFilename) {
+        console.warn("Content-Dispositionヘッダーからファイル名を取得できませんでした。デフォルト値を使用します。");
         downloadFilename = `recording_${meetingId}.${format}`;
       }
 

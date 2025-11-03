@@ -53,7 +53,7 @@ export default function MeetingSummaryPage() {
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState<boolean>(true);
 
   // トースト通知
-  const { toasts, showSuccess, showError, markAsClosing, removeToastDelayed } = useToast();
+  const { toasts, showToast, showSuccess, showError, removeToastByMessage, markAsClosing, removeToastDelayed } = useToast();
 
   // 会議データ
   const [summaryData, setSummaryData] = useState({
@@ -251,12 +251,24 @@ export default function MeetingSummaryPage() {
   };
 
   const handleDownloadAudio = async () => {
+    // 処理中のトーストは自動で閉じないようにする（duration: Infinity）
+    showToast(`${DOWNLOAD_FORMAT_LABELS.audio}をダウンロード中...`, "info", Infinity, true);
+    
     try {
-      showSuccess(`${DOWNLOAD_FORMAT_LABELS.audio}をダウンロード中...`);
       await apiClient.downloadAudio(meetingId);
+      
+      // ダウンロード中のトーストをメッセージで検索して閉じる
+      removeToastByMessage(`${DOWNLOAD_FORMAT_LABELS.audio}をダウンロード中...`, "info");
+      
+      // 完了メッセージを表示
       showSuccess(`${DOWNLOAD_FORMAT_LABELS.audio}のダウンロードが完了しました`);
     } catch (error) {
       console.error("音声ファイルのダウンロードに失敗しました:", error);
+      
+      // ダウンロード中のトーストをメッセージで検索して閉じる
+      removeToastByMessage(`${DOWNLOAD_FORMAT_LABELS.audio}をダウンロード中...`, "info");
+      
+      // エラーメッセージを表示
       const errorMessage = error instanceof Error ? error.message : "予期しないエラーが発生しました";
       showError(`ダウンロードに失敗しました: ${errorMessage}`);
     }
