@@ -53,7 +53,7 @@ export default function MeetingSummaryPage() {
   const [isLoadingTranscripts, setIsLoadingTranscripts] = useState<boolean>(true);
 
   // トースト通知
-  const { toasts, showSuccess, showError, removeToast } = useToast();
+  const { toasts, showSuccess, showError, markAsClosing, removeToastDelayed } = useToast();
 
   // 会議データ
   const [summaryData, setSummaryData] = useState({
@@ -504,12 +504,16 @@ export default function MeetingSummaryPage() {
       </div>
 
       {/* トースト通知 */}
-      {toasts.map((toast) => (
+      {toasts.map((toast, index) => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
-          onClose={() => removeToast(toast.id)}
+          isClosing={toast.isClosing}
+          onMarkAsClosing={() => markAsClosing(toast.id)}
+          onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}
+          index={index}
         />
       ))}
     </div>

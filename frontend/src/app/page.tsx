@@ -148,7 +148,7 @@ export default function MeetingHistoryPage() {
   const [isLoadingPreview, setIsLoadingPreview] = useState<boolean>(false);
 
   // トースト通知
-  const { toasts, showSuccess, removeToast } = useToast();
+  const { toasts, showSuccess, markAsClosing, removeToastDelayed } = useToast();
 
   // -----------------------------
   // ユーティリティ関数
@@ -925,12 +925,16 @@ export default function MeetingHistoryPage() {
       )}
 
       {/* トースト通知 */}
-      {toasts.map((toast) => (
+      {toasts.map((toast, index) => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
-          onClose={() => removeToast(toast.id)}
+          isClosing={toast.isClosing}
+          onMarkAsClosing={() => markAsClosing(toast.id)}
+          onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}
+          index={index}
         />
       ))}
     </div>

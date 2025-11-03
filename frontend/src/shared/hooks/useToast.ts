@@ -6,6 +6,7 @@ interface ToastState {
   id: number;
   message: string;
   type: ToastType;
+  isClosing?: boolean;
 }
 
 /**
@@ -67,6 +68,22 @@ export const useToast = () => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
+  const markAsClosing = useCallback((id: number) => {
+    // アニメーション開始をマーク
+    setToasts((prev) =>
+      prev.map((toast) =>
+        toast.id === id ? { ...toast, isClosing: true } : toast
+      )
+    );
+  }, []);
+
+  const removeToastDelayed = useCallback((id: number, delay: number) => {
+    // 遅延削除（アニメーション完了後に削除）
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, delay);
+  }, []);
+
   return {
     toasts,
     showToast,
@@ -75,5 +92,7 @@ export const useToast = () => {
     showWarning,
     showInfo,
     removeToast,
+    markAsClosing,
+    removeToastDelayed,
   };
 };

@@ -89,7 +89,7 @@ export default function MeetingActivePage() {
   const lastSummaryRef = useRef<string>("");
 
   // トースト通知
-  const { toasts, showSuccess, removeToast } = useToast();
+  const { toasts, showSuccess, markAsClosing, removeToastDelayed } = useToast();
 
   // 脱線検知機能
   const {
@@ -951,12 +951,16 @@ export default function MeetingActivePage() {
       )}
 
       {/* トースト通知 */}
-      {toasts.map((toast) => (
+      {toasts.map((toast, index) => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
-          onClose={() => removeToast(toast.id)}
+          isClosing={toast.isClosing}
+          onMarkAsClosing={() => markAsClosing(toast.id)}
+          onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}
+          index={index}
         />
       ))}
     </div>

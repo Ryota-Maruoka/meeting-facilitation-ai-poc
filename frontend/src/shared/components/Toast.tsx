@@ -5,35 +5,57 @@ import React, { useEffect } from "react";
 type ToastType = "success" | "error" | "warning" | "info";
 
 interface ToastProps {
+  id: number;
   message: string;
   type?: ToastType;
   duration?: number;
-  onClose: () => void;
+  isClosing?: boolean;
+  onMarkAsClosing: () => void;
+  onRemoveDelayed: (delay: number) => void;
+  index?: number;
 }
 
 /**
  * トースト通知コンポーネント
  *
  * 画面右上に数秒間表示される通知メッセージ
+ * 指定時間経過後、スライドアウトアニメーションを表示してから閉じる
  *
  * @param props.message - 表示するメッセージ
  * @param props.type - 通知タイプ（success/error/warning/info）
  * @param props.duration - 表示時間（ミリ秒、デフォルト3000ms）
- * @param props.onClose - 閉じる時のコールバック
+ * @param props.isClosing - 閉じる中かどうか（親から渡される）
+ * @param props.onMarkAsClosing - 閉じる開始をマークするコールバック
+ * @param props.onRemoveDelayed - 遅延削除のコールバック
  */
 const Toast: React.FC<ToastProps> = ({
+  id,
   message,
   type = "info",
   duration = 3000,
-  onClose,
+  isClosing: isClosingProp = false,
+  onMarkAsClosing,
+  onRemoveDelayed,
+  index = 0,
 }) => {
   useEffect(() => {
+    // 指定時間後にスライドアウトアニメーション開始
     const timer = setTimeout(() => {
-      onClose();
+      onMarkAsClosing();
+      // アニメーション完了後に削除（300ms後）
+      onRemoveDelayed(300);
     }, duration);
 
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [duration, onMarkAsClosing, onRemoveDelayed]);
+
+  const handleClose = () => {
+    onMarkAsClosing();
+    // アニメーション完了後に削除（300ms後）
+    onRemoveDelayed(300);
+  };
 
   const getTypeStyles = () => {
     switch (type) {
@@ -90,10 +112,14 @@ const Toast: React.FC<ToastProps> = ({
 
         .toast-container {
           position: fixed;
-          top: 24px;
           right: 24px;
           z-index: 9999;
           animation: slideInRight 0.3s ease-out;
+        }
+
+        .toast-container.closing {
+          animation: slideOutRight 0.3s ease-out forwards;
+          pointer-events: none;
         }
 
         .toast {
@@ -148,7 +174,13 @@ const Toast: React.FC<ToastProps> = ({
           font-size: 20px;
         }
       `}</style>
-      <div className="toast-container">
+      <div
+        className={`toast-container ${isClosingProp ? "closing" : ""}`}
+        style={{
+          top: `${24 + index * 80}px`,
+          zIndex: 9999 - index,
+        }}
+      >
         <div className="toast">
           <div
             className="toast-icon"
@@ -161,7 +193,7 @@ const Toast: React.FC<ToastProps> = ({
           <div className="toast-content">{message}</div>
           <button
             className="toast-close"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="閉じる"
           >
             <span className="material-icons">close</span>

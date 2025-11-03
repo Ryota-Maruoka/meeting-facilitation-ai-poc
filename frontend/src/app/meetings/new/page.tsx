@@ -83,7 +83,7 @@ function MeetingCreationForm() {
   const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth());
 
   // トースト通知
-  const { toasts, showError, showSuccess, removeToast } = useToast();
+  const { toasts, showError, showSuccess, markAsClosing, removeToastDelayed } = useToast();
 
   // -----------------------------
   // 既存の下書きデータを読み込む
@@ -734,12 +734,16 @@ function MeetingCreationForm() {
       )}
 
       {/* トースト通知 */}
-      {toasts.map((toast) => (
+      {toasts.map((toast, index) => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
-          onClose={() => removeToast(toast.id)}
+          isClosing={toast.isClosing}
+          onMarkAsClosing={() => markAsClosing(toast.id)}
+          onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}
+          index={index}
         />
       ))}
     </div>
