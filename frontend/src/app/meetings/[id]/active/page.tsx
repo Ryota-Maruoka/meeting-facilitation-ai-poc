@@ -106,27 +106,46 @@ export default function MeetingActivePage() {
 
   // 初期化：APIから会議データを取得
   useEffect(() => {
+    if (!meetingId) return;
+
+    // 画面遷移時に前回の表示を即座に消す（取り違え防止）
+    setMeetingData(null);
+    setParkingLot([]);
+    setTranscripts([]);
+    setIsRecordingStarted(false);
+
+    let isActive = true;
+    const currentId = meetingId;
+
     const fetchMeetingData = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        const meeting = await apiClient.getMeeting(meetingId);
+
+        const meeting = await apiClient.getMeeting(currentId);
+        if (!isActive) return;
         setMeetingData(meeting);
-        
+
         // 保留事項も取得
-        const parkingItems = await apiClient.getParkingItems(meetingId);
-        setParkingLot(parkingItems.map(item => item.title));
+        const parkingItems = await apiClient.getParkingItems(currentId);
+        if (!isActive) return;
+        setParkingLot(parkingItems.map((item) => item.title));
       } catch (err) {
+        if (!isActive) return;
         console.error("Failed to fetch meeting data:", err);
         setError(err instanceof Error ? err.message : "会議データの取得に失敗しました");
       } finally {
+        if (!isActive) return;
         setIsLoading(false);
       }
     };
 
-    if (meetingId) {
-      fetchMeetingData();
-    }
+    fetchMeetingData();
+
+    return () => {
+      // 直前のリクエスト結果を無視（競合防止）
+      isActive = false;
+    };
   }, [meetingId]);
 
   // 経過時間の更新（1秒ごと）
