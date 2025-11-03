@@ -66,14 +66,6 @@ def _check_audio_quality(audio_file_path: str) -> Tuple[bool, Dict[str, Any]]:
                 rms >= MIN_RMS_THRESHOLD
             )
             
-            logger.info(
-                f">>> 音声品質チェック: "
-                f"ファイルサイズ={file_size} bytes, "
-                f"音声長={audio_duration_seconds:.2f}秒, "
-                f"比率={bytes_per_second:.1f} bytes/秒, "
-                f"RMS={rms:.6f}, "
-                f"有効={'Yes' if is_valid else 'No (無音)'}"
-            )
             
             return is_valid, audio_info
             
@@ -107,13 +99,6 @@ def _filter_hallucination_text(text: str, is_weakly_silence: bool = False) -> st
     japanese_chars = re.findall(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', text)
     total_chars = len(re.findall(r'[^\s]', text))  # 空白以外の文字数
     japanese_ratio = len(japanese_chars) / total_chars if total_chars > 0 else 0
-    
-    logger.info(
-        f">>> テキスト品質チェック: "
-        f"日本語文字数={len(japanese_chars)}, "
-        f"総文字数={total_chars}, "
-        f"日本語割合={japanese_ratio:.2%}"
-    )
     
     # 日本語の割合が20%未満の場合は除外（明らかに日本語ではない）
     if total_chars > 5 and japanese_ratio < 0.2:
@@ -195,11 +180,12 @@ def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
                 wav_path
             ]
             
-            logger.debug(f"チャンク{idx}変換: {' '.join(cmd_convert)}")
             result = subprocess.run(
                 cmd_convert,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=60,
                 check=True
             )
@@ -208,7 +194,6 @@ def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
                 raise RuntimeError(f"チャンク{idx}のWAV変換に失敗: {wav_path}")
             
             wav_files.append(wav_path)
-            logger.debug(f"チャンク{idx}変換完了: {os.path.getsize(wav_path)} bytes")
         
         # ステップ2: WAVファイルをconcatデマックスで結合
         logger.info(f"ステップ2: WAVファイルを結合開始（{len(wav_files)}個）")
@@ -239,6 +224,8 @@ def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
             cmd_concat,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=300,
             check=True
         )
@@ -267,6 +254,8 @@ def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
             cmd_webm,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=300,
             check=True
         )
@@ -285,11 +274,21 @@ def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
     except subprocess.CalledProcessError as e:
         logger.error(f"FFmpeg処理エラー: {e}")
         logger.error(f"returncode: {e.returncode}")
+        error_message = str(e)
         if e.stderr:
-            logger.error(f"stderr（最後の500文字）: {e.stderr[-500:]}")
+            try:
+                stderr_snippet = e.stderr[-500:] if len(e.stderr) > 500 else e.stderr
+                logger.error(f"stderr（最後の500文字）: {stderr_snippet}")
+                error_message = stderr_snippet[-200:] if len(stderr_snippet) > 200 else stderr_snippet
+            except (AttributeError, TypeError):
+                error_message = str(e.stderr)
         if e.stdout:
-            logger.error(f"stdout（最後の500文字）: {e.stdout[-500:]}")
-        raise RuntimeError(f"WebMチャンクの結合に失敗しました: {e.stderr[-200] if e.stderr else str(e)}")
+            try:
+                stdout_snippet = e.stdout[-500:] if len(e.stdout) > 500 else e.stdout
+                logger.error(f"stdout（最後の500文字）: {stdout_snippet}")
+            except (AttributeError, TypeError):
+                pass
+        raise RuntimeError(f"WebMチャンクの結合に失敗しました: {error_message}")
     except subprocess.TimeoutExpired:
         logger.error("FFmpeg処理がタイムアウトしました")
         raise RuntimeError("WebMチャンクの結合がタイムアウトしました")
@@ -301,7 +300,6 @@ def combine_webm_chunks(chunk_files: list[str], output_path: str) -> str:
         try:
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
-                logger.debug(f"一時ディレクトリを削除: {temp_dir}")
         except Exception as cleanup_error:
             logger.warning(f"一時ディレクトリの削除に失敗: {cleanup_error}")
 
@@ -369,23 +367,15 @@ def convert_webm_to_format(webm_file_path: str, output_format: str = "mp3") -> s
         
         cmd.append(output_path)
         
-        logger.info(f"音声変換開始: {webm_file_path} -> {output_path} ({output_format})")
-        logger.debug(f"FFmpegコマンド: {' '.join(cmd)}")
-        
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
+            encoding='utf-8',
+            errors='replace',
             timeout=300,  # 5分タイムアウト（長時間の録音に対応）
             check=True
         )
-        
-        # FFmpegの出力をログに記録（エラー確認用）
-        if result.stdout:
-            logger.debug(f"FFmpeg stdout: {result.stdout[:500]}")
-        if result.stderr:
-            # stderrは通常、進行状況情報を含むため、警告レベルで記録
-            logger.debug(f"FFmpeg stderr: {result.stderr[:500]}")
         
         # 変換後のファイルが存在し、サイズが0でないことを確認
         if not os.path.exists(output_path):
@@ -405,9 +395,19 @@ def convert_webm_to_format(webm_file_path: str, output_format: str = "mp3") -> s
         return output_path
         
     except subprocess.CalledProcessError as e:
-        logger.error(f"FFmpeg変換エラー: {e}")
-        logger.error(f"returncode: {e.returncode}")
-        logger.error(f"stderr: {e.stderr[:500] if e.stderr else '(empty)'}")
+        # エラーメッセージを安全に取得
+        error_msg = f"returncode: {e.returncode}"
+        try:
+            if e.stderr:
+                stderr_snippet = e.stderr[:500] if len(e.stderr) > 500 else e.stderr
+                logger.error(f"FFmpeg変換エラー: {error_msg}")
+                logger.error(f"stderr: {stderr_snippet}")
+            else:
+                logger.error(f"FFmpeg変換エラー: {error_msg}")
+        except (AttributeError, TypeError, UnicodeEncodeError) as err:
+            # エンコーディングエラーが発生した場合は、エラーメッセージを安全に処理
+            logger.error(f"FFmpeg変換エラー: {error_msg}")
+            logger.error(f"エラーメッセージの取得に失敗: {err}")
         
         # 一時ファイルを削除
         if os.path.exists(output_path):
@@ -481,27 +481,20 @@ def convert_webm_to_wav(webm_data: bytes) -> bytes:
                 wav_path
             ]
             
-            logger.info(f">>> ffmpeg変換開始: {' '.join(cmd)}")
-            logger.info(f">>> WebMデータサイズ: {len(webm_data)} bytes")
-            logger.info(f">>> WebMファイルパス: {webm_path}")
-            logger.info(f">>> WAV出力パス: {wav_path}")
-
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=30,  # 30秒タイムアウト
                 check=True
             )
-
-            logger.info(f">>> ffmpeg stdout: {result.stdout[:500] if result.stdout else '(empty)'}")
-            logger.info(f">>> ffmpeg stderr: {result.stderr[:500] if result.stderr else '(empty)'}")
 
             # WAVファイルを読み込み
             with open(wav_path, 'rb') as f:
                 wav_data = f.read()
 
-            logger.info(f">>> ffmpeg変換完了: WebM -> WAV (16kHz mono, {len(wav_data)} bytes)")
             return wav_data
             
         except subprocess.CalledProcessError as e:
@@ -554,9 +547,7 @@ def _get_whisper_model():
 
     if _whisper_model is None:
         import whisper
-        print(">>> Whisperモデルを初回ロード中...")
         _whisper_model = whisper.load_model("tiny")
-        print(">>> Whisperモデルのロード完了")
 
     return _whisper_model
 
@@ -574,14 +565,10 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
     try:
         import torch
 
-        print(">>> Python版Whisperで文字起こし中...")
-        logger.info(">>> Python版Whisperで文字起こしを実行")
-
         # 音声品質チェック（無音判定）
         is_valid, audio_info = _check_audio_quality(audio_file_path)
         
         if not is_valid:
-            logger.info(">>> 音声データが無音と判定されました（Python Whisperに送信せずスキップ）")
             return {
                 "text": "",
                 "language": "ja",
@@ -601,7 +588,6 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
             audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
         # 音声ファイルを文字起こし
-        print(f">>> Whisper実行開始（音声長: {audio_info['duration']:.2f}秒）")
         try:
             result = model.transcribe(
                 audio_np,
@@ -609,9 +595,7 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
                 fp16=False,  # Windows CPU環境ではfp16を無効化
                 verbose=False,
             )
-            print(">>> Whisper実行完了")
         except Exception as e:
-            print(f">>> Whisper実行中にエラー: {e}")
             raise
 
         text = result["text"].strip()
@@ -627,9 +611,6 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
             text,
             is_weakly_silence=is_weakly_silence
         )
-        
-        print(f">>> Whisper文字起こし結果: {filtered_text[:200] if filtered_text else '(empty)'}")
-        logger.info(f">>> Whisper文字起こし結果: {filtered_text[:200] if filtered_text else '(empty)'}")
 
         # メモリを解放
         import gc
@@ -641,22 +622,15 @@ async def transcribe_with_python_whisper(audio_file_path: str) -> Dict[str, Any]
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        print(">>> メモリ解放完了")
-
         return {
             "text": filtered_text,
             "language": "ja",
         }
 
     except ImportError as e:
-        print(f">>> ImportError: {e}")
         logger.error("Python版Whisperがインストールされていません。pip install openai-whisper を実行してください")
         raise RuntimeError("openai-whisper is not installed. Run: pip install openai-whisper")
     except Exception as e:
-        print(f">>> Python版Whisper文字起こしエラー: {e}")
-        print(f">>> エラー詳細: {type(e).__name__}")
-        import traceback
-        print(traceback.format_exc())
         logger.error(f"Python版Whisper文字起こしエラー: {e}", exc_info=True)
         raise
 
@@ -690,7 +664,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 temp_wav_path = None
 
                 if audio_file_path.lower().endswith('.webm'):
-                    print(">>> WebMファイルをWAVに変換してからAzure Whisperに渡します")
                     with open(audio_file_path, 'rb') as f:
                         webm_data = f.read()
 
@@ -701,8 +674,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                         temp_wav.write(wav_data)
                         temp_wav_path = temp_wav.name
                         processed_audio_path = temp_wav_path
-
-                    print(f">>> WAV変換完了: {processed_audio_path}")
 
                 # 音声品質チェック（無音判定）
                 is_valid, audio_info = _check_audio_quality(processed_audio_path)
@@ -742,7 +713,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 if temp_wav_path and os.path.exists(temp_wav_path):
                     try:
                         os.unlink(temp_wav_path)
-                        print(f">>> 一時WAVファイルを削除: {temp_wav_path}")
                     except Exception as e:
                         logger.warning(f"一時ファイル削除エラー: {e}")
 
@@ -769,7 +739,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 temp_wav_path = None
 
                 if audio_file_path.lower().endswith('.webm'):
-                    print(">>> WebMファイルをWAVに変換してからWhisperに渡します")
                     with open(audio_file_path, 'rb') as f:
                         webm_data = f.read()
 
@@ -781,8 +750,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                         temp_wav_path = temp_wav.name
                         processed_audio_path = temp_wav_path
 
-                    print(f">>> WAV変換完了: {processed_audio_path}")
-
                 # Python Whisperで文字起こし実行（Azure Whisperと同じロジック）
                 result = await transcribe_with_python_whisper(processed_audio_path)
 
@@ -790,7 +757,6 @@ async def transcribe_audio_file(audio_file_path: str) -> Dict[str, Any]:
                 if temp_wav_path and os.path.exists(temp_wav_path):
                     try:
                         os.unlink(temp_wav_path)
-                        print(f">>> 一時WAVファイルを削除: {temp_wav_path}")
                     except Exception as e:
                         logger.warning(f"一時ファイル削除エラー: {e}")
 

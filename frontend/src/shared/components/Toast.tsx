@@ -1,39 +1,83 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
 interface ToastProps {
+  id: number;
   message: string;
   type?: ToastType;
   duration?: number;
-  onClose: () => void;
+  isClosing?: boolean;
+  onMarkAsClosing: () => void;
+  onRemoveDelayed: (delay: number) => void;
+  index?: number;
 }
 
 /**
  * トースト通知コンポーネント
  *
  * 画面右上に数秒間表示される通知メッセージ
+ * 指定時間経過後、スライドアウトアニメーションを表示してから閉じる
  *
  * @param props.message - 表示するメッセージ
  * @param props.type - 通知タイプ（success/error/warning/info）
  * @param props.duration - 表示時間（ミリ秒、デフォルト3000ms）
- * @param props.onClose - 閉じる時のコールバック
+ * @param props.isClosing - 閉じる中かどうか（親から渡される）
+ * @param props.onMarkAsClosing - 閉じる開始をマークするコールバック
+ * @param props.onRemoveDelayed - 遅延削除のコールバック
  */
 const Toast: React.FC<ToastProps> = ({
+  id,
   message,
   type = "info",
-  duration = 3000,
-  onClose,
+  duration = 3000, // デフォルトは3000ms
+  isClosing: isClosingProp = false,
+  onMarkAsClosing,
+  onRemoveDelayed,
+  index = 0,
 }) => {
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, duration);
+  // durationがundefinedの場合はデフォルト値を使用
+  const actualDuration = duration ?? 3000;
+  // コールバック関数の最新参照を保持（useEffectの再実行を防ぐため）
+  const onMarkAsClosingRef = useRef(onMarkAsClosing);
+  const onRemoveDelayedRef = useRef(onRemoveDelayed);
 
-    return () => clearTimeout(timer);
-  }, [duration, onClose]);
+  // 最新のコールバック参照を更新
+  useEffect(() => {
+    onMarkAsClosingRef.current = onMarkAsClosing;
+    onRemoveDelayedRef.current = onRemoveDelayed;
+  }, [onMarkAsClosing, onRemoveDelayed]);
+
+  useEffect(() => {
+    // 既に閉じる処理が開始されている場合はタイマーを設定しない
+    if (isClosingProp) {
+      return;
+    }
+
+    // durationがInfinityの場合は自動で閉じない（処理中トースト用）
+    if (actualDuration === Infinity) {
+      return;
+    }
+
+    // 指定時間後にスライドアウトアニメーション開始
+    const timer = setTimeout(() => {
+      onMarkAsClosingRef.current();
+      // アニメーション完了後に削除（300ms後）
+      onRemoveDelayedRef.current(300);
+    }, actualDuration);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [actualDuration, isClosingProp]);
+
+  const handleClose = () => {
+    onMarkAsClosingRef.current();
+    // アニメーション完了後に削除（300ms後）
+    onRemoveDelayedRef.current(300);
+  };
 
   const getTypeStyles = () => {
     switch (type) {
@@ -90,10 +134,14 @@ const Toast: React.FC<ToastProps> = ({
 
         .toast-container {
           position: fixed;
-          top: 24px;
           right: 24px;
           z-index: 9999;
           animation: slideInRight 0.3s ease-out;
+        }
+
+        .toast-container.closing {
+          animation: slideOutRight 0.3s ease-out forwards;
+          pointer-events: none;
         }
 
         .toast {
@@ -148,7 +196,13 @@ const Toast: React.FC<ToastProps> = ({
           font-size: 20px;
         }
       `}</style>
-      <div className="toast-container">
+      <div
+        className={`toast-container ${isClosingProp ? "closing" : ""}`}
+        style={{
+          top: `${24 + index * 80}px`,
+          zIndex: 9999 - index,
+        }}
+      >
         <div className="toast">
           <div
             className="toast-icon"
@@ -161,7 +215,7 @@ const Toast: React.FC<ToastProps> = ({
           <div className="toast-content">{message}</div>
           <button
             className="toast-close"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="閉じる"
           >
             <span className="material-icons">close</span>

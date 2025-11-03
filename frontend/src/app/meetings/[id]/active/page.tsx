@@ -76,6 +76,7 @@ export default function MeetingActivePage() {
 
   const [summary, setSummary] = useState<string>("");
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
+  const [hasAttemptedSummaryGeneration, setHasAttemptedSummaryGeneration] = useState<boolean>(false);
 
   const [parkingLot, setParkingLot] = useState<string[]>([]);
   const [backModalOpen, setBackModalOpen] = useState<boolean>(false);
@@ -83,9 +84,12 @@ export default function MeetingActivePage() {
   const [isEndingMeeting, setIsEndingMeeting] = useState<boolean>(false);
   const [isAddingToParkingLot, setIsAddingToParkingLot] = useState<boolean>(false);
   const transcriptRef = useRef<LiveTranscriptAreaHandle | null>(null);
+  const summaryPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isPollingRef = useRef<boolean>(false);
+  const lastSummaryRef = useRef<string>("");
 
   // トースト通知
-  const { toasts, showSuccess, removeToast } = useToast();
+  const { toasts, showToast, showSuccess, showError, removeToastByMessage, markAsClosing, removeToastDelayed } = useToast();
 
   // 脱線検知機能
   const {
@@ -130,6 +134,20 @@ export default function MeetingActivePage() {
         const parkingItems = await apiClient.getParkingItems(currentId);
         if (!isActive) return;
         setParkingLot(parkingItems.map((item) => item.title));
+
+        // 既存の要約があれば取得（会議中画面に戻ってきた場合）
+        try {
+          const existingSummary = await apiClient.getSummary(currentId);
+          if (!isActive) return;
+          if (existingSummary?.summary) {
+            setSummary(existingSummary.summary);
+          }
+        } catch (summaryErr) {
+          // 要約未生成（404）はエラーとして扱わない
+          if (!(summaryErr instanceof Error && summaryErr.message.includes("404"))) {
+            console.warn("要約の取得に失敗しました:", summaryErr);
+          }
+        }
       } catch (err) {
         if (!isActive) return;
         console.error("Failed to fetch meeting data:", err);
@@ -163,46 +181,121 @@ export default function MeetingActivePage() {
 
   // 3分ごとに要約を取得・生成
   useEffect(() => {
-    if (!isMeetingStarted || !isRecordingStarted) return;
+    if (!isMeetingStarted || !isRecordingStarted) {
+      return;
+    }
 
     // 要約を生成・取得する関数
     const fetchSummary = async () => {
+      // 既にポーリング中/生成中なら新規開始しない（次の3分タイマーまで待機）
+      if (isPollingRef.current || isGeneratingSummary) {
+        console.log("要約生成をスキップします（既に生成中またはポーリング中）");
+        return;
+      }
+      
+      // 要約生成が実行されたことをマーク（エラーでも成功でも）
+      setHasAttemptedSummaryGeneration(true);
+      
       try {
         // まず文字起こしデータの存在を確認
         const transcripts = await apiClient.getTranscripts(meetingId);
         if (!transcripts || transcripts.length === 0) {
-          console.log("文字起こしデータがありません。音声を録音してください。");
+          console.error("要約生成: 文字起こしデータがありません");
           return;
         }
 
-        console.log("要約を生成中...");
+        // 既存のポーリングを確実にクリア（安全のため）
+        if (summaryPollIntervalRef.current) {
+          clearInterval(summaryPollIntervalRef.current);
+          summaryPollIntervalRef.current = null;
+        }
+
+        console.log("要約生成を開始します（非同期）...");
         setIsGeneratingSummary(true);
+        isPollingRef.current = true;
 
-        // 要約を生成
-        await apiClient.generateSummary(meetingId);
+        // 非同期で要約生成を開始
+        await apiClient.generateSummaryAsync(meetingId);
 
-        // 生成された要約を取得
-        const summaryData = await apiClient.getSummary(meetingId);
+        // ポーリングで要約を取得（最大30回、5秒間隔 = 約2.5分）
+        let pollCount = 0;
+        const maxPolls = 30;
 
-        if (summaryData && summaryData.summary) {
-          setSummary(summaryData.summary);
-          console.log("要約を更新しました");
+        const pollSummary = async () => {
+          // ポーリング中に状態が変わっていないか確認
+          if (!isPollingRef.current) {
+            console.log("ポーリングが既に停止されているため、処理を中断します");
+            return;
+          }
+
+          try {
+            pollCount++;
+            console.log(`要約をポーリング中... (${pollCount}/${maxPolls})`);
+
+            const summaryData = await apiClient.getSummary(meetingId);
+
+            if (summaryData?.summary) {
+              // 内容が変わっていなければ再描画を避ける
+              if (lastSummaryRef.current !== summaryData.summary) {
+                setSummary(summaryData.summary);
+                lastSummaryRef.current = summaryData.summary;
+                console.log("要約を更新しました");
+              } else {
+                console.log("要約は前回と同一のため更新をスキップしました");
+              }
+              
+              // ポーリング成功時：確実にすべてをクリア
+              if (summaryPollIntervalRef.current) {
+                clearInterval(summaryPollIntervalRef.current);
+                summaryPollIntervalRef.current = null;
+              }
+              setIsGeneratingSummary(false);
+              isPollingRef.current = false;
+              console.log("要約ポーリングを完了しました。次の3分タイマーまで待機します。");
+            } else if (pollCount >= maxPolls) {
+              console.log("要約生成のポーリングを終了します（最大試行回数に達しました）");
+              if (summaryPollIntervalRef.current) {
+                clearInterval(summaryPollIntervalRef.current);
+                summaryPollIntervalRef.current = null;
+              }
+              setIsGeneratingSummary(false);
+              isPollingRef.current = false;
+            }
+          } catch (error) {
+            console.error("要約のポーリングに失敗しました:", error);
+            if (pollCount >= maxPolls) {
+              // 最大試行回数に達した場合のみクリア
+              if (summaryPollIntervalRef.current) {
+                clearInterval(summaryPollIntervalRef.current);
+                summaryPollIntervalRef.current = null;
+              }
+              setIsGeneratingSummary(false);
+              isPollingRef.current = false;
+            }
+          }
+        };
+
+        // 初回は即座に実行
+        pollCount++;
+        await pollSummary();
+
+        // 以降は5秒ごとにポーリング（成功していない場合のみ）
+        if (isPollingRef.current && !summaryPollIntervalRef.current) {
+          summaryPollIntervalRef.current = setInterval(pollSummary, 5000);
         }
       } catch (error) {
-        console.error("要約の取得に失敗しました:", error);
-
-        // エラーメッセージをユーザーに表示
+        // エラーはコンソールログのみ（UIには表示しない）
+        console.error("要約の生成に失敗しました:", error);
         if (error instanceof Error) {
-          if (error.message.includes("文字起こしデータが見つかりません")) {
-            console.log("文字起こしデータがありません。音声を録音してください。");
-          } else if (error.message.includes("文字起こしテキストが空です")) {
-            console.log("文字起こしテキストが空です。音声を録音してください。");
-          } else {
-            console.log("要約生成中にエラーが発生しました:", error.message);
-          }
+          console.error("エラー詳細:", error.message);
         }
-      } finally {
+        // エラー時も確実に状態をクリア
         setIsGeneratingSummary(false);
+        isPollingRef.current = false;
+        if (summaryPollIntervalRef.current) {
+          clearInterval(summaryPollIntervalRef.current);
+          summaryPollIntervalRef.current = null;
+        }
       }
     };
 
@@ -218,6 +311,11 @@ export default function MeetingActivePage() {
     return () => {
       clearTimeout(initialTimeout);
       clearInterval(summaryInterval);
+      if (summaryPollIntervalRef.current) {
+        clearInterval(summaryPollIntervalRef.current);
+        summaryPollIntervalRef.current = null;
+      }
+      isPollingRef.current = false;
     };
   }, [isMeetingStarted, isRecordingStarted, meetingId]);
 
@@ -284,7 +382,8 @@ export default function MeetingActivePage() {
   const handleDeviationAddToParkingLot = async (alertId: string, content: string, addToNextAgenda: boolean = false) => {
     // ローディング開始
     setIsAddingToParkingLot(true);
-    showSuccess("保留事項に追加中...");
+    // 処理中のトーストは自動で閉じないようにする（duration: Infinity）
+    showToast("保留事項に追加中...", "info", Infinity, true);
     
     try {
       await apiClient.addParkingItem(meetingId, content, addToNextAgenda);
@@ -300,10 +399,19 @@ export default function MeetingActivePage() {
       
       setParkingLot(parkingItems.map(item => item.title));
       
+      // 追加中のトーストをメッセージで検索して閉じる
+      removeToastByMessage("保留事項に追加中...", "info");
+      
+      // 完了メッセージを表示
       showSuccess("保留事項に追加しました");
     } catch (error) {
       console.error("保留事項の追加に失敗:", error);
-      showSuccess("保留事項の追加に失敗しました");
+      
+      // 追加中のトーストをメッセージで検索して閉じる
+      removeToastByMessage("保留事項に追加中...", "info");
+      
+      // エラーメッセージを表示
+      showError("保留事項の追加に失敗しました");
     } finally {
       // ローディング終了
       setIsAddingToParkingLot(false);
@@ -418,7 +526,7 @@ export default function MeetingActivePage() {
     // 文字起こしデータが存在する場合、録音開始状態を更新
     if (newTranscripts.length > 0 && !isRecordingStarted) {
       setIsRecordingStarted(true);
-      console.log("録音開始を検出しました。要約生成を開始します。");
+      console.log("録音開始を検出しました。");
     }
   };
 
@@ -599,14 +707,14 @@ export default function MeetingActivePage() {
             <div className="section-content" style={{ flex: 1, overflowY: "auto", minHeight: 0, paddingBottom: "16px" }}>
               {!isRecordingStarted || !isMeetingStarted ? (
                 <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
-                  文字起こしが開始されると要約が自動生成されます
+                  会議開始から約3分後に要約が自動生成されます
                 </div>
               ) : isGeneratingSummary ? (
                 <div className="loading-box">
                   <div className="spinner"></div>
-                  <span>生成中...</span>
+                  <span>要約生成中...</span>
                 </div>
-              ) : (
+              ) : summary ? (
                 <div style={{ lineHeight: 1.8 }}>
                   <ReactMarkdown
                     components={{
@@ -633,8 +741,12 @@ export default function MeetingActivePage() {
                       ),
                     }}
                   >
-                    {summary || "要約データがありません"}
+                    {summary}
                   </ReactMarkdown>
+                </div>
+              ) : (
+                <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>
+                  {hasAttemptedSummaryGeneration ? "要約データがありません" : "会議開始から約3分後に要約が自動生成されます"}
                 </div>
               )}
             </div>
@@ -849,12 +961,17 @@ export default function MeetingActivePage() {
       )}
 
       {/* トースト通知 */}
-      {toasts.map((toast) => (
+      {toasts.map((toast, index) => (
         <Toast
           key={toast.id}
+          id={toast.id}
           message={toast.message}
           type={toast.type}
-          onClose={() => removeToast(toast.id)}
+          duration={toast.duration}
+          isClosing={toast.isClosing}
+          onMarkAsClosing={() => markAsClosing(toast.id)}
+          onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}
+          index={index}
         />
       ))}
     </div>

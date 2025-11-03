@@ -304,10 +304,10 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
           // チャンクをクリア（次の周期の準備）
           audioChunksRef.current = [];
           
-          // 最初のチャンク送信完了後、30秒間隔に切り替え
+          // 最初のチャンク送信完了後も30秒間隔を継続
           const wasFirstChunk = isFirstChunkRef.current;
           if (wasFirstChunk) {
-            console.log("✅ 最初のチャンク送信完了、以降は30秒間隔に切り替え");
+            console.log("✅ 最初のチャンク送信完了（30秒後）、以降も30秒間隔を継続");
             isFirstChunkRef.current = false;
           }
           
@@ -358,13 +358,10 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         setError("録音中にエラーが発生しました");
       };
 
-      // 最初のチャンクフラグをリセット
-      isFirstChunkRef.current = true;
-
-      // ✅ 最初の3秒で即座にチャンクを送信（最初の数秒間の音声を確実に取得）
-      // その後は30秒間隔に切り替える
-      console.log("🎙️ 録音開始：最初のチャンクは3秒後に送信");
-      mediaRecorder.start(3000); // 最初は3秒間隔
+      // ✅ 最初から30秒間隔でチャンクを送信（統一的な間隔でシンプルに）
+      // 会議開始直後の無音データ送信を避けるため、最初から30秒間隔を使用
+      console.log("🎙️ 録音開始：30秒間隔でチャンクを送信");
+      mediaRecorder.start(30000); // 最初から30秒間隔
 
       // ✅ 録音サイクルを管理する関数（onstopから呼ばれる）
       const scheduleNextRecording = () => {
@@ -373,8 +370,8 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         }
         
         if (mediaRecorderRef.current && streamRef.current) {
-          const isFirstChunk = isFirstChunkRef.current;
-          const nextInterval = isFirstChunk ? 3000 : 30000;
+          // 常に30秒間隔
+          const nextInterval = 30000;
           
           // 次のサイクルをスケジュール
           recordingIntervalRef.current = setTimeout(() => {
@@ -383,8 +380,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
             }
             
             if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-              const intervalLabel = isFirstChunk ? "3秒" : "30秒";
-              console.log(`🔄 ${intervalLabel}経過：録音を停止→再開`);
+              console.log(`🔄 30秒経過：録音を停止→再開`);
               mediaRecorderRef.current.stop();
               // onstopで自動的に次のサイクルが開始される
             }
@@ -392,7 +388,7 @@ const LiveTranscriptArea = forwardRef<LiveTranscriptAreaHandle, LiveTranscriptAr
         }
       };
       
-      // 最初のサイクルをスケジュール（3秒後に最初のチャンクを送信）
+      // 最初のサイクルをスケジュール（30秒後に最初のチャンクを送信）
       scheduleNextRecording();
       
       setIsRecording(true);

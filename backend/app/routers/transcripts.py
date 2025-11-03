@@ -166,20 +166,7 @@ async def transcribe_audio_upload(
 
         try:
             # 音声文字起こし実行
-            logger.info("=== 文字起こし開始 ===")
-            print(f"=== 文字起こし開始: {temp_file_path} ===")
-
             result = await transcribe_audio_file(temp_file_path)
-
-            logger.info("=== 文字起こし完了 ===")
-            
-            # ログ出力
-            log_data = {
-                "text": result.get("text", "")[:100] if result.get("text") else "",
-                "language": result.get("language"),
-            }
-            print(f"=== 文字起こし完了: {log_data} ===")
-            logger.info("=== 文字起こし完了: %s ===", log_data)
 
             # 文字起こし結果にIDとタイムスタンプを追加
             current_timestamp = datetime.now(timezone.utc).isoformat()
@@ -228,13 +215,13 @@ async def transcribe_audio_upload(
 @router.get("/audio/download")
 def download_audio(
     meeting_id: str,
-    format: str = Query("wav", description="出力形式: mp3, wav, webm")
+    format: str = Query("mp3", description="出力形式: mp3, wav, webm")
 ) -> FileResponse:
     """会議の録音ファイルをダウンロードする。
 
     Args:
         meeting_id: 会議ID
-        format: 出力形式（"mp3", "wav", "webm"のいずれか、デフォルト: "wav"）
+        format: 出力形式（"mp3", "wav", "webm"のいずれか、デフォルト: "mp3"）
 
     Returns:
         録音ファイル（指定された形式）
@@ -255,11 +242,39 @@ def download_audio(
 
     # 会議タイトルを使用してファイル名を生成（ファイル名に使用できない文字を除去）
     meeting_title = meeting.get("title", "meeting")
-    # ファイル名に使用できない文字を除去（Windows/Mac/Linux共通）
-    safe_title = "".join(c for c in meeting_title if c.isalnum() or c in (" ", "-", "_", "(", ")"))[:50]
-    safe_title = safe_title.strip().replace(" ", "_")  # スペースをアンダースコアに置換
     
-    # 日付をYYYYMMDD形式で取得（会議開始日時または作成日時から）
+    # ファイル名で使用できない文字を定義（Windows/Mac/Linux共通）
+    # < > : " / \ | ? * および制御文字（null文字など）
+    invalid_chars = '<>:"/\\|?*\x00'
+    
+    # ASCII文字のみを抽出し、使用できない文字を除去
+    # HTTPヘッダーはlatin-1でエンコードされるため、ASCIIのみにする必要がある
+    safe_title = ""
+    for c in meeting_title:
+        # ASCII文字のみ、かつ使用できない文字でない場合のみ追加
+        if ord(c) < 128 and c not in invalid_chars:
+            # 英数字、または許可された記号（スペース、ハイフン、アンダースコア、括弧、ドット）
+            if c.isalnum() or c in (" ", "-", "_", "(", ")", "."):
+                safe_title += c
+    
+    # 最大50文字に制限
+    safe_title = safe_title[:50].strip()
+    
+    # スペースをアンダースコアに置換
+    safe_title = safe_title.replace(" ", "_")
+    
+    # 連続するアンダースコアを1つにまとめる
+    while "__" in safe_title:
+        safe_title = safe_title.replace("__", "_")
+    
+    # 先頭・末尾のアンダースコアやハイフンを除去
+    safe_title = safe_title.strip("_-")
+    
+    # 空文字列の場合はデフォルト値を使用
+    if not safe_title:
+        safe_title = "meeting"
+    
+    # 日付をYYYYMMDD形式で取得（会議日時または作成日時から）
     date_str = ""
     meeting_date = meeting.get("started_at") or meeting.get("created_at")
     if meeting_date:
@@ -278,13 +293,13 @@ def download_audio(
         # 日付情報がない場合は現在の日付を使用
         date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     
-    # ファイル名形式: 会議タイトル_YYYYMMDD_会議ID.拡張子
-    filename = f"{safe_title}_{date_str}_{meeting_id}.{format_lower}"
+    # ファイル名形式: 会議名_日付.拡張子
+    filename = f"{safe_title}_{date_str}.{format_lower}"
     
-    # Content-Dispositionヘッダー用にURLエンコード（RFC 5987形式）
-    from urllib.parse import quote
-    filename_encoded = quote(filename, safe='')
-    filename_header = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{filename_encoded}"
+    # Content-Dispositionヘッダー用に設定
+    # HTTPヘッダーはlatin-1でエンコードされるため、filenameはASCIIのみ
+    # 日本語を含む元のファイル名が必要な場合は、filename*を使用（ただし、Starletteの制約によりASCIIのみを使用）
+    filename_header = f'attachment; filename="{filename}"'
 
     # 音声チャンクファイルのリストを取得（新しい方式）
     chunk_files = store.list_audio_chunks(meeting_id)
@@ -300,17 +315,13 @@ def download_audio(
         # 既存ファイルを使用（WebM形式の場合のみ）
         if format_lower == "webm":
             logger.info("既存のrecording.webmファイルを使用: %s", recording_path)
-            # filename_headerはこの時点では未定義なので、ここで生成
-            from urllib.parse import quote
-            filename_encoded_legacy = quote(filename, safe='')
-            filename_header_legacy = f"attachment; filename=\"{filename}\"; filename*=UTF-8''{filename_encoded_legacy}"
             # FileResponseはfilenameパラメータで直接設定されるが、ヘッダーも設定可能
             response = FileResponse(
                 path=recording_path,
                 media_type="audio/webm",
                 filename=filename,
             )
-            response.headers["Content-Disposition"] = filename_header_legacy
+            response.headers["Content-Disposition"] = filename_header
             return response
         # 変換が必要な場合は、既存ファイルを使用
         webm_source_path = recording_path
@@ -455,7 +466,13 @@ def download_audio(
         )
     except Exception as e:
         logger.error("Failed to convert audio file: %s", e, exc_info=True)
-        raise HTTPException(500, f"音声ファイルの変換に失敗しました: {str(e)}")
+        # エラーメッセージを安全に取得
+        try:
+            error_detail = str(e)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # エンコーディングエラーが発生した場合は、エラータイプのみを表示
+            error_detail = f"{type(e).__name__}: エンコーディングエラー（詳細はログを確認してください）"
+        raise HTTPException(500, f"音声ファイルの変換に失敗しました: {error_detail}")
     finally:
         # 結合済みWebMファイルが一時ファイルの場合は削除
         if combined_webm_path and webm_source_path == combined_webm_path:
