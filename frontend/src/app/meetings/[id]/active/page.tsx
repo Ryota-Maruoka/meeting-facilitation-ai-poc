@@ -89,7 +89,7 @@ export default function MeetingActivePage() {
   const lastSummaryRef = useRef<string>("");
 
   // トースト通知
-  const { toasts, showSuccess, markAsClosing, removeToastDelayed } = useToast();
+  const { toasts, showToast, showSuccess, showError, removeToastByMessage, markAsClosing, removeToastDelayed } = useToast();
 
   // 脱線検知機能
   const {
@@ -382,7 +382,8 @@ export default function MeetingActivePage() {
   const handleDeviationAddToParkingLot = async (alertId: string, content: string, addToNextAgenda: boolean = false) => {
     // ローディング開始
     setIsAddingToParkingLot(true);
-    showSuccess("保留事項に追加中...");
+    // 処理中のトーストは自動で閉じないようにする（duration: Infinity）
+    showToast("保留事項に追加中...", "info", Infinity, true);
     
     try {
       await apiClient.addParkingItem(meetingId, content, addToNextAgenda);
@@ -398,10 +399,19 @@ export default function MeetingActivePage() {
       
       setParkingLot(parkingItems.map(item => item.title));
       
+      // 追加中のトーストをメッセージで検索して閉じる
+      removeToastByMessage("保留事項に追加中...", "info");
+      
+      // 完了メッセージを表示
       showSuccess("保留事項に追加しました");
     } catch (error) {
       console.error("保留事項の追加に失敗:", error);
-      showSuccess("保留事項の追加に失敗しました");
+      
+      // 追加中のトーストをメッセージで検索して閉じる
+      removeToastByMessage("保留事項に追加中...", "info");
+      
+      // エラーメッセージを表示
+      showError("保留事項の追加に失敗しました");
     } finally {
       // ローディング終了
       setIsAddingToParkingLot(false);
@@ -957,6 +967,7 @@ export default function MeetingActivePage() {
           id={toast.id}
           message={toast.message}
           type={toast.type}
+          duration={toast.duration}
           isClosing={toast.isClosing}
           onMarkAsClosing={() => markAsClosing(toast.id)}
           onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 type ToastType = "success" | "error" | "warning" | "info";
 
@@ -32,29 +32,51 @@ const Toast: React.FC<ToastProps> = ({
   id,
   message,
   type = "info",
-  duration = 3000,
+  duration = 3000, // デフォルトは3000ms
   isClosing: isClosingProp = false,
   onMarkAsClosing,
   onRemoveDelayed,
   index = 0,
 }) => {
+  // durationがundefinedの場合はデフォルト値を使用
+  const actualDuration = duration ?? 3000;
+  // コールバック関数の最新参照を保持（useEffectの再実行を防ぐため）
+  const onMarkAsClosingRef = useRef(onMarkAsClosing);
+  const onRemoveDelayedRef = useRef(onRemoveDelayed);
+
+  // 最新のコールバック参照を更新
   useEffect(() => {
+    onMarkAsClosingRef.current = onMarkAsClosing;
+    onRemoveDelayedRef.current = onRemoveDelayed;
+  }, [onMarkAsClosing, onRemoveDelayed]);
+
+  useEffect(() => {
+    // 既に閉じる処理が開始されている場合はタイマーを設定しない
+    if (isClosingProp) {
+      return;
+    }
+
+    // durationがInfinityの場合は自動で閉じない（処理中トースト用）
+    if (actualDuration === Infinity) {
+      return;
+    }
+
     // 指定時間後にスライドアウトアニメーション開始
     const timer = setTimeout(() => {
-      onMarkAsClosing();
+      onMarkAsClosingRef.current();
       // アニメーション完了後に削除（300ms後）
-      onRemoveDelayed(300);
-    }, duration);
+      onRemoveDelayedRef.current(300);
+    }, actualDuration);
 
     return () => {
       clearTimeout(timer);
     };
-  }, [duration, onMarkAsClosing, onRemoveDelayed]);
+  }, [actualDuration, isClosingProp]);
 
   const handleClose = () => {
-    onMarkAsClosing();
+    onMarkAsClosingRef.current();
     // アニメーション完了後に削除（300ms後）
-    onRemoveDelayed(300);
+    onRemoveDelayedRef.current(300);
   };
 
   const getTypeStyles = () => {

@@ -510,6 +510,7 @@ export default function MeetingSummaryPage() {
           id={toast.id}
           message={toast.message}
           type={toast.type}
+          duration={toast.duration}
           isClosing={toast.isClosing}
           onMarkAsClosing={() => markAsClosing(toast.id)}
           onRemoveDelayed={(delay) => removeToastDelayed(toast.id, delay)}
