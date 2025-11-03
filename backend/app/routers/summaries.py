@@ -52,8 +52,11 @@ def generate_summary(meeting_id: str, window_min: int = 3) -> MiniSummary:
     text = "\n".join(recent_texts)
     summary = generate_mini_summary(text)
     # Persist last summary snapshot (optional)
-    meeting["last_summary"] = summary
-    store.save_meeting(meeting_id, meeting)
+    # 注意: parkingフィールドなどの既存データを保護するため、保存前に最新データを再読み込み
+    meeting_to_update = store.load_meeting(meeting_id)
+    if meeting_to_update:
+        meeting_to_update["last_summary"] = summary
+        store.save_meeting(meeting_id, meeting_to_update)
     return summary
 
 
