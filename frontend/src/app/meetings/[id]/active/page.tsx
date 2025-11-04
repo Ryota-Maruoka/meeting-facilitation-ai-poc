@@ -33,7 +33,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import ReactMarkdown from "react-markdown";
 import { commonStyles } from "@/styles/commonStyles";
 import { ICONS, PARKING_LOT_LABEL } from "@/lib/constants";
 import Toast from "@/shared/components/Toast";
@@ -43,7 +42,7 @@ import DeviationAlert from "@/components/sections/DeviationAlert";
 import { useDeviationDetection } from "@/hooks/useDeviationDetection";
 import { apiClient } from "@/lib/api";
 import { formatElapsedHMSFromIso } from "@/lib/time";
-import type { Meeting } from "@/lib/types";
+import type { Meeting, MeetingDetailPreview } from "@/lib/types";
 
 export default function MeetingActivePage() {
   const params = useParams();
@@ -74,7 +73,7 @@ export default function MeetingActivePage() {
     timestamp: string;
   }>>([]);
 
-  const [summary, setSummary] = useState<string>("");
+  const [summaryData, setSummaryData] = useState<MeetingDetailPreview | null>(null);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState<boolean>(false);
   const [hasAttemptedSummaryGeneration, setHasAttemptedSummaryGeneration] = useState<boolean>(false);
 
@@ -86,7 +85,7 @@ export default function MeetingActivePage() {
   const transcriptRef = useRef<LiveTranscriptAreaHandle | null>(null);
   const summaryPollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isPollingRef = useRef<boolean>(false);
-  const lastSummaryRef = useRef<string>("");
+  const lastSummaryRef = useRef<MeetingDetailPreview | null>(null);
 
   // トースト通知
   const { toasts, showToast, showSuccess, showError, removeToastByMessage, markAsClosing, removeToastDelayed } = useToast();
@@ -139,8 +138,8 @@ export default function MeetingActivePage() {
         try {
           const existingSummary = await apiClient.getSummary(currentId);
           if (!isActive) return;
-          if (existingSummary?.summary) {
-            setSummary(existingSummary.summary);
+          if (existingSummary) {
+            setSummaryData(existingSummary);
           }
         } catch (summaryErr) {
           // 要約未生成（404）はエラーとして扱わない
@@ -232,18 +231,22 @@ export default function MeetingActivePage() {
             pollCount++;
             console.log(`要約をポーリング中... (${pollCount}/${maxPolls})`);
 
-            const summaryData = await apiClient.getSummary(meetingId);
+            const fetchedSummary = await apiClient.getSummary(meetingId);
 
-            if (summaryData?.summary) {
+            if (fetchedSummary && (fetchedSummary.summary || fetchedSummary.decisions.length > 0 || fetchedSummary.undecided.length > 0 || fetchedSummary.actions.length > 0)) {
               // 内容が変わっていなければ再描画を避ける
-              if (lastSummaryRef.current !== summaryData.summary) {
-                setSummary(summaryData.summary);
-                lastSummaryRef.current = summaryData.summary;
+              const hasChanged =
+                !lastSummaryRef.current ||
+                JSON.stringify(lastSummaryRef.current) !== JSON.stringify(fetchedSummary);
+
+              if (hasChanged) {
+                setSummaryData(fetchedSummary);
+                lastSummaryRef.current = fetchedSummary;
                 console.log("要約を更新しました");
               } else {
                 console.log("要約は前回と同一のため更新をスキップしました");
               }
-              
+
               // ポーリング成功時：確実にすべてをクリア
               if (summaryPollIntervalRef.current) {
                 clearInterval(summaryPollIntervalRef.current);
@@ -714,35 +717,140 @@ export default function MeetingActivePage() {
                   <div className="spinner"></div>
                   <span>要約生成中...</span>
                 </div>
-              ) : summary ? (
-                <div style={{ lineHeight: 1.8 }}>
-                  <ReactMarkdown
-                    components={{
-                      h2: ({ node, ...props }) => (
-                        <>
-                          <hr style={{ border: 'none', borderTop: '2px solid #e0e0e0', margin: '20px 0 16px 0' }} />
-                          <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '12px', color: '#1f2937' }} {...props} />
-                        </>
-                      ),
-                      h3: ({ node, ...props }) => (
-                        <>
-                          <hr style={{ border: 'none', borderTop: '1px solid #e8e8e8', margin: '16px 0 12px 0' }} />
-                          <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#374151' }} {...props} />
-                        </>
-                      ),
-                      p: ({ node, ...props }) => (
-                        <p style={{ marginBottom: '12px' }} {...props} />
-                      ),
-                      ul: ({ node, ...props }) => (
-                        <ul style={{ marginLeft: '20px', marginBottom: '12px' }} {...props} />
-                      ),
-                      li: ({ node, ...props }) => (
-                        <li style={{ marginBottom: '6px' }} {...props} />
-                      ),
-                    }}
-                  >
-                    {summary}
-                  </ReactMarkdown>
+              ) : summaryData ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {/* 決定事項 */}
+                  <div>
+                    <div style={{
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      marginBottom: "8px",
+                      color: "#1f2937",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px"
+                    }}>
+                      <span className="material-icons icon-sm" style={{ color: "#4CAF50" }}>check_circle</span>
+                      <span>決定事項</span>
+                      {summaryData.decisions.length > 0 && (
+                        <span style={{ fontSize: "12px", color: "#757575", fontWeight: 400 }}>
+                          ({summaryData.decisions.length}件)
+                        </span>
+                      )}
+                    </div>
+                    {summaryData.decisions.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: "20px", listStyleType: "disc" }}>
+                        {summaryData.decisions.map((decision, index) => (
+                          <li key={index} style={{
+                            fontSize: "13px",
+                            marginBottom: "6px",
+                            lineHeight: 1.6,
+                            color: "#374151"
+                          }}>
+                            {decision}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div style={{ fontSize: "12px", color: "#9e9e9e", fontStyle: "italic", padding: "8px 0" }}>
+                        決定事項はありません
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 未決事項 */}
+                  <div>
+                    <div style={{
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      marginBottom: "8px",
+                      color: "#1f2937",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px"
+                    }}>
+                      <span className="material-icons icon-sm" style={{ color: "#FF9800" }}>help_outline</span>
+                      <span>未決事項</span>
+                      {summaryData.undecided.length > 0 && (
+                        <span style={{ fontSize: "12px", color: "#757575", fontWeight: 400 }}>
+                          ({summaryData.undecided.length}件)
+                        </span>
+                      )}
+                    </div>
+                    {summaryData.undecided.length > 0 ? (
+                      <ul style={{ margin: 0, paddingLeft: "20px", listStyleType: "disc" }}>
+                        {summaryData.undecided.map((item, index) => (
+                          <li key={index} style={{
+                            fontSize: "13px",
+                            marginBottom: "6px",
+                            lineHeight: 1.6,
+                            color: "#374151"
+                          }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div style={{ fontSize: "12px", color: "#9e9e9e", fontStyle: "italic", padding: "8px 0" }}>
+                        未決事項はありません
+                      </div>
+                    )}
+                  </div>
+
+                  {/* アクション項目 */}
+                  <div>
+                    <div style={{
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      marginBottom: "8px",
+                      color: "#1f2937",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px"
+                    }}>
+                      <span className="material-icons icon-sm" style={{ color: "#2196F3" }}>assignment_turned_in</span>
+                      <span>アクション項目</span>
+                      {summaryData.actions.length > 0 && (
+                        <span style={{ fontSize: "12px", color: "#757575", fontWeight: 400 }}>
+                          ({summaryData.actions.length}件)
+                        </span>
+                      )}
+                    </div>
+                    {summaryData.actions.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        {summaryData.actions.map((action, index) => (
+                          <div key={index} style={{
+                            fontSize: "13px",
+                            padding: "10px 12px",
+                            backgroundColor: "#f8f9fa",
+                            borderRadius: "6px",
+                            borderLeft: "3px solid #2196F3",
+                            lineHeight: 1.6
+                          }}>
+                            <div style={{ fontWeight: 500, marginBottom: "4px", color: "#212121" }}>
+                              {action.title}
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#616161", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                              {action.owner && (
+                                <span>
+                                  <span style={{ fontWeight: 500 }}>担当:</span> {action.owner}
+                                </span>
+                              )}
+                              {action.due && (
+                                <span>
+                                  <span style={{ fontWeight: 500 }}>期限:</span> {action.due}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: "12px", color: "#9e9e9e", fontStyle: "italic", padding: "8px 0" }}>
+                        アクション項目はありません
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div style={{ color: "#666", fontStyle: "italic", textAlign: "center", padding: "20px" }}>

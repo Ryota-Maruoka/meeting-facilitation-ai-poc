@@ -696,7 +696,12 @@ export const commonStyles = `
   .agenda-progress-label {
     font-size: 13px;
     color: #616161;
-    min-width: 140px;
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .agenda-progress-bar {
