@@ -345,6 +345,48 @@ echo $OPENAI_API_KEY      # Linux/Mac
 
 本番は ECS(Fargate) で稼働します。バックエンド用スタックは `infra/24_be_ecs.yml` です。
 
+### CodeBuild/CodePipeline（推奨）
+
+- ビルド仕様: `buildspec.be.yml`
+- Dockerfile: `.github/docker/api/Dockerfile`
+- 出力物:
+  - `image.json`（イメージタグを格納）
+  - `imagedefinitions.json`（ECSサービス更新用定義。CodePipeline がこれを参照）
+
+パイプラインの流れ（概略）:
+
+1. CodeBuild が Docker build（`.github/docker/api/Dockerfile`）
+2. ECR にタグ付きで push（`IMAGE_TAG`）
+3. `imagedefinitions.json` をアーティファクトに出力
+4. CodePipeline が ECS サービスへ新イメージを適用
+
+運用上の注意:
+
+- アカウントIDやリージョンは CodeBuild 内で動的に解決（`aws sts get-caller-identity`）。
+- 環境変数（`CORS_ORIGINS` 等）は CloudFormation（`infra/24_be_ecs.yml`）のタスク定義から注入可。
+
+#### 本番構成（実値）
+
+- バックエンドALB（DNS）: `https://bemac-meeting-fe-alb-1103801797.ap-northeast-1.elb.amazonaws.com`
+- フロント公開ドメイン: `https://bemac-meeting.fr-aicompass.com`
+- AWSアカウントID: `111938288341`
+- ECSクラスタ名: `bemac-fe-cluster`
+- サービス名（BE）: `bemac-be-svc`
+- サービス名（FE）: `bemac-fe-svc`
+- タスク定義名（BE）: `bemac-be-task`
+- タスク定義名（FE）: `bemac-fe-task`
+- CodeBuildプロジェクト（BE）: `bemac-be-build`
+- CodeBuildプロジェクト（FE）: `bemac-fe-build`
+- CodePipeline（BE）: `bemac-be-pipeline`
+- CodePipeline（FE）: `bemac-fe-pipeline`
+
+推奨設定:
+
+- CORS_ORIGINS に `https://bemac-meeting.fr-aicompass.com` を含める
+- フロントの `BACKEND_API_URL` は上記ALB DNSを指定（HTTPS推奨）
+
+> 注記: フロントエンド/バックエンドはいずれも同一ECSクラスタ `bemac-fe-cluster` 上で稼働します。
+
 ### 事前準備
 
 - VPC/サブネット/ALB/TargetGroup/ECR は別スタックで用意済み（ImportValue を参照）。
@@ -383,17 +425,6 @@ echo $OPENAI_API_KEY      # Linux/Mac
 ### 起動コマンド
 
 タスク定義にて `uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4` を実行します。
-
----
-
-## 🗂 レガシー（EC2）デプロイ
-
-EC2向けの手順は引き続き参照可能ですが、現行はECSを推奨します。
-
-**関連ドキュメント**:
-- **[DEPLOY_AUTOMATION_SSM.md](./DEPLOY_AUTOMATION_SSM.md)** - SSM経由の自動デプロイ
-- **[DEPLOY_PRODUCTION.md](./DEPLOY_PRODUCTION.md)** - EC2環境セットアップ
-- **[GITHUB_SECRETS_SSM.md](./GITHUB_SECRETS_SSM.md)** - GitHub Secrets設定
 
 ---
 

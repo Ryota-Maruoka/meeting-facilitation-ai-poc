@@ -22,7 +22,7 @@ cp .env.example .env.local
 
 **注意**: `.env.local`は必須ではありません。このファイルが存在しない場合、アプリケーションは自動的に以下のように動作します:
 - ローカル開発環境 (`localhost`): `http://localhost:8000` にアクセス
-- 本番環境: `/backend-api` (Vercelリライト経由でEC2バックエンドにプロキシ)
+- 本番環境: `/backend-api` (Vercelリライト経由でECSバックエンドにプロキシ)
 
 ### 3. 開発サーバーの起動
 
@@ -65,6 +65,50 @@ npm run build
 ```bash
 npm start
 ```
+
+### CodeBuild/CodePipeline での本番デプロイ（ECS）
+
+フロントエンドは AWS CodeBuild/CodePipeline を利用してデプロイします。
+
+- ビルド仕様: `buildspec.fe.yml`
+- Dockerfile: `.github/docker/web/Dockerfile`
+- ECS へは ECR にプッシュしたイメージを CodePipeline で反映
+
+重要なビルド引数/環境変数（buildspec で指定）:
+
+- `BACKEND_API_URL`: Next.js のリライト先URL（バックエンドALBのフルURL）
+  - 例: `https://<backend-alb-dns-name>.ap-northeast-1.elb.amazonaws.com`
+  - Next.js の `rewrites` で `/backend-api/*` → `BACKEND_API_URL/*` にプロキシされます（`frontend/next.config.mjs`）。
+- `NEXT_PUBLIC_API_URL`: クライアント直叩きのAPIベースURL（相対 `/backend-api` 推奨）
+
+パイプラインの流れ（概略）:
+
+1. CodeBuild が `buildspec.fe.yml` に従い Docker build
+2. `--build-arg BACKEND_API_URL` と `--build-arg NEXT_PUBLIC_API_URL` を Dockerfile に注入
+3. 生成したイメージを ECR に push、`imagedefinitions.json` を出力
+4. CodePipeline が ECS サービスへ新イメージを適用
+
+運用上の注意:
+
+- `BACKEND_API_URL` はバックエンドのALB（ECS/BE）のDNS名を設定してください。
+- アカウントIDやリージョンは CodeBuild 内で `aws sts get-caller-identity` を利用し動的取得しています（`buildspec.fe.yml`）。
+
+#### 本番構成（実値）
+
+- バックエンドALB（DNS）: `https://bemac-meeting-fe-alb-1103801797.ap-northeast-1.elb.amazonaws.com`
+- フロント公開ドメイン: `https://bemac-meeting.fr-aicompass.com`
+- AWSアカウントID: `111938288341`
+- ECSクラスタ名: `bemac-fe-cluster`
+- サービス名（BE）: `bemac-be-svc`
+- サービス名（FE）: `bemac-fe-svc`
+- タスク定義名（BE）: `bemac-be-task`
+- タスク定義名（FE）: `bemac-fe-task`
+- CodeBuildプロジェクト（BE）: `bemac-be-build`
+- CodeBuildプロジェクト（FE）: `bemac-fe-build`
+- CodePipeline（BE）: `bemac-be-pipeline`
+- CodePipeline（FE）: `bemac-fe-pipeline`
+
+> 注記: フロントエンド/バックエンドはいずれも同一ECSクラスタ `bemac-fe-cluster` 上で稼働します。
 
 ## バックエンドの起動
 
@@ -111,7 +155,7 @@ Next.jsは初回アクセス時にページをコンパイルします。特にM
 ### API接続エラー
 
 - ローカル開発時にAPIエラーが発生する場合は、バックエンドサーバーが `http://localhost:8000` で起動していることを確認してください
-- 本番環境の場合は、Vercelのリライト設定が正しく構成されていることを確認してください
+- 本番環境の場合は、`BACKEND_API_URL`（ALB）と `NEXT_PUBLIC_API_URL` が正しく設定されていることを確認してください
 
 ### favicon 404エラー
 
